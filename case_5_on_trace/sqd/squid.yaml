@@ -1,0 +1,20 @@
+manifestVersion: subsquid.io/v0.1
+name: case-5-on-trace
+version: 1
+description: 'The very first evm squid from manifest  '
+build: 
+deploy:
+  addons:
+    postgres: 
+    rpc:
+      - eth.http
+  processor:
+    cmd:
+      - sqd
+      - process:prod
+    env:
+      NODE_OPTIONS: '--expose-gc --max-old-space-size=4096'
+  api:
+    cmd:
+      - sqd
+      - serve:prod

@@ -1,0 +1,24 @@
+{
+  "private": true,
+  "name": "sentio",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "sentio build",
+    "gen": "sentio gen",
+    "test": "sentio test",
+    "upload": "sentio upload",
+    "postinstall": "sentio gen"
+  },
+  "dependencies": {
+    "@envio-dev/hypersync-client": "^0.6.3",
+    "@sentio/sdk": "3.1.0",
+    "bignumber.js": "^9.3.0",
+    "parquetjs": "^0.11.2",
+    "viem": "^2.28.0"
+  },
+  "devDependencies": {
+    "@sentio/cli": "3.1.0",
+    "typescript": "^5.5.2"
+  }
+}
