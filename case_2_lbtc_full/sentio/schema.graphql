@@ -1,0 +1,15 @@
+type AccountSnapshot @entity {
+  id: String!,
+  timestamp: BigInt!
+  lbtcBalance: BigDecimal!
+  points: BigDecimal!
+}
+
+type Transfer @entity {
+  id: ID!
+  from: String! @index
+  to: String! @index
+  value: BigInt!
+  blockNumber: BigInt!
+  transactionHash: Bytes
+}

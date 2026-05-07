@@ -1,0 +1,54 @@
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+*.exe
+*.obj
+*.out
+*.compile
+*.native
+*.byte
+*.cmo
+*.annot
+*.cmi
+*.cmx
+*.cmt
+*.cmti
+*.cma
+*.a
+*.cmxa
+*.obj
+*~
+*.annot
+*.cmj
+*.bak
+lib/*
+*.mlast
+*.mliast
+.merlin
+.bsb.lock
+benchmarks/
+artifacts
+cache
+generated
+*.bs.js
+*.bs.mjs
+*.gen.ts
+.env

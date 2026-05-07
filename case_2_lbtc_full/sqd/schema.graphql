@@ -1,0 +1,25 @@
+type Snapshot @entity {
+  id: ID! @index
+  account: Accounts @index # Null for global update tracker
+  timestamp: BigInt! @index # Block timestamp in seconds
+  mintAmount: BigDecimal # Amount minted in this snapshot (if applicable)
+  balance: BigDecimal! # Current token balance
+  point: BigDecimal # Accumulated points
+  triggerEvent: String!
+}
+
+type Accounts @entity {
+  id: ID! @index
+  lastSnapshotTimestamp: BigInt! # Timestamp of the last snapshot for this account
+  snapshots: [Snapshot!]! @derivedFrom(field: "account") # All snapshots for this account
+}
+
+type Transfer @entity {
+  id: ID!
+  from: String! @index
+  to: String! @index
+  value: BigInt!
+  blockNumber: BigInt!
+  transactionHash: Bytes
+}
+
