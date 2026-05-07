@@ -1,0 +1,25 @@
+specVersion: 1.2.0
+indexerHints:
+  prune: auto
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum
+    name: case_3_ethereum_block
+    network: mainnet
+    source:
+      abi: BlockIndexer
+      startBlock: 0
+      endBlock: 100000
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.9
+      language: wasm/assemblyscript
+      entities:
+        - Block
+      abis:
+        - name: BlockIndexer
+          file: ./abis/BlockIndexer.json
+      blockHandlers:
+        - handler: handleBlock
+      file: ./src/subgraph.ts
