@@ -4,7 +4,7 @@
   "description": "Scripts to download and compare data for Case 2 LBTC Full",
   "private": true,
   "dependencies": {
-    "axios": "^1.9.0",
+    "axios": "1.9.0",
     "bignumber.js": "^9.2.1",
     "hypersync-client": "^0.0.5",
     "moment": "^2.30.1",
