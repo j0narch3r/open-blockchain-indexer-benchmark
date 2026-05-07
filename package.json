@@ -1,0 +1,19 @@
+{
+  "dependencies": {
+    "@electric-sql/pglite": "0.2.13",
+    "dotenv": "^16.5.0",
+    "yaml": "^2.7.0"
+  },
+  "type": "module",
+  "scripts": {
+    "benchmark:sentio": "bun run scripts/benchmark.ts",
+    "benchmark:envio": "bun run scripts/envio_benchmark.ts",
+    "benchmark:envio:case2": "bun run scripts/envio_benchmark.ts --case case_2_lbtc_full"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "axios": "^1.13.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  }
+}
