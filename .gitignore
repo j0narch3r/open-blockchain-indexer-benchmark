@@ -1,0 +1,100 @@
+*.exe
+*.obj
+*.out
+*.compile
+*.native
+*.byte
+*.cmo
+*.annot
+*.cmi
+*.cmx
+*.cmt
+*.cmti
+*.cma
+*.a
+*.cmxa
+*.obj
+*~
+*.annot
+*.cmj
+*.bak
+**/subgraph/data/*
+**/sqd/lib/*
+lib/*
+*.mlast
+*.mliast
+.vscode
+.merlin
+.bsb.lock
+**/node_modules/
+benchmarks/
+artifacts
+cache
+generated
+logs
+*.bs.js
+*.bs.mjs
+*.gen.ts
+build
+.env
+.env.sh
+**/dist/
+**/build/
+**/node_modules/
+**/dist/
+**/build/
+**/node_modules/
+**/migrations/**
+**/internal/**
+
+# Dependencies
+node_modules/
+.pnp/
+.pnp.js
+
+# Testing
+coverage/
+
+# Production
+dist/
+build/
+generated/
+public/dist/
+**/sqd/lib/**
+
+# Misc
+.DS_Store
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Data files only - keep all code
+# Exclude parquet and large data files
+**/*.parquet
+**/data/*.json
+**/downloads/*.json
+!**/downloads/package.json
+**/data/*.html
+**/data/*.png
+**/downloads/*.html
+**/downloads/*.txt
+**/*-log.txt
+**/*status-log.json
+**/tmp/**
+*.tar.gz
+changes.patch
+
+# But keep the directory structure
+!**/data/.gitkeep
+
+# IDE
+.idea/
+.vscode/
+
+*.log
