@@ -21,6 +21,9 @@ This benchmark tests the performance of various indexers when processing Uniswap
 | Subgraph   | 19m            | 35,039  | 19000000-19010000 |
 | Ponder     | 21m            | 35,039  | 19000000-19010000 |
 | Sentio v3.0.0-rc.9 | 15m            | 232(Pairs), 73994(Swap events)  | 19000000-19010000 |
+| Goldsky | 0.22m | 35,039 | 19000000-19010000 |
+
+^ Goldsky data generated June 2026.
 
 ## Data Distribution Details
 
@@ -41,6 +44,9 @@ The distribution of factory events and pairs across platforms shows some variati
 - **Subgraph**: 35,039 records
   - Complete coverage of all factory events
   - Accurate pair tracking
+- **Goldsky**: 35,039 records
+  - Complete coverage of all factory events
+  - Accurate pair tracking
 
 ## Key Findings
 
@@ -50,10 +56,12 @@ The distribution of factory events and pairs across platforms shows some variati
    - The difference in Subsquid's record count is due to template configuration limitations
 
 2. **Performance Differences**:
-   - **Envio HyperIndex** demonstrated exceptional performance at 30 seconds
+   - **Goldsky** led the pack, indexing all swaps in ~13 seconds
+   - **Envio HyperIndex** also demonstrated exceptional performance at 30 seconds
    - **Subsquid** showed excellent performance at 2 minutes
    - **Sentio** and **Subgraph** completed in 19 minutes
    - **Ponder** processed in 21 minutes
+
 
 3. **Implementation Approaches**:
    - Envio HyperIndex's implementation leverages their optimized template processing
@@ -65,6 +73,7 @@ The distribution of factory events and pairs across platforms shows some variati
 Each subdirectory contains the implementation for a specific indexing platform:
 - `/sentio`: Sentio implementation 
 - `/envio`: Envio HyperIndex implementation
+- `/goldsky`: Goldsky implementation
 - `/ponder`: Ponder implementation
 - `/sqd`: Subsquid implementation
 - `/subgraph`: Subgraph implementation

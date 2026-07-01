@@ -87,6 +87,9 @@ Each platform handles periodic updates differently:
 | Sqd | 34m | 7,634 | 1770.73s | 0.88s | 56268.61s |-|
 | Subgraph | 1h3m | 7,634 | - | - | - |-|
 | Sentio Subgraph | 56m | 7,634 | - | - | - ||
+| Goldsky | 1.49m | 7,634 | - | - | - | - |
+
+^ Goldsky data generated June 2026.
 
 ### Performance Analysis
 
@@ -107,6 +110,9 @@ Each platform handles periodic updates differently:
    - Sentio's storage time is high but consistent between modes (53666.13s vs 55715.68s)
    - Ponder demonstrates excellent storage performance at 83.49s
    - Sqd shows moderate storage time at 56268.61s
+
+4. **Goldsky**:
+   - Completed the combined balances + points workload (7,634 accounts) in 1.49 min via Edge RPC
 
 ### Points Distribution Analysis
 
@@ -156,6 +162,7 @@ Key findings from the points distribution analysis:
 Each subdirectory contains the implementation for a specific indexing platform:
 - `/sentio`: Sentio implementation 
 - `/envio`: Envio implementation
+- `/goldsky`: Goldsky implementation
 - `/ponder`: Ponder implementation
 - `/sqd`: Subsquid implementation
 - `/subgraph`: The Graph subgraph implementation
