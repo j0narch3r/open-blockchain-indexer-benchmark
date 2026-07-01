@@ -33,16 +33,12 @@ The benchmark requires each indexer to:
 | Subsquid | 10m              | 296,734        | |
 | Subgraph | 3h9m             | 296,734        | |
 | Sentio(v3.0.0-rc9) | 13.06m | 296,278 | [Project link](https://app.sentio.xyz/sentio/case_1_lbtc_event_only/) |
-| Goldsky | 3.34m | 294,278 | 100% complete |
-
-^ Goldsky data generated June 2026.
 
 ## Implementation Examples
 
 Each subdirectory contains the implementation for a specific indexing platform:
 - `/sentio`: Sentio implementation 
 - `/envio`: Envio implementation
-- `/goldsky`: Goldsky implementation
 - `/ponder`: Ponder implementation
 - `/sqd`: Subsquid implementation
 - `/subgraph`: The Graph subgraph implementation
@@ -63,7 +59,6 @@ Each implementation includes its own setup and execution instructions. Generally
 - Ponder processes events significantly slower and misses approximately 5% of the data
 - Sentio and Subsquid offer good balance of speed and completeness
 - Subgraph requires significantly more time to complete the indexing
-- Goldsky completes the full event set in 3.34 min — the fastest complete indexing run
 
 This benchmark showcases performance differences when handling straightforward event-only indexing, which is a common use case for blockchain data indexing.
 
