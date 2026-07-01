@@ -15,19 +15,16 @@ This repository contains performance benchmarks for various blockchain indexers,
 
 ## Latest Benchmark Results
 
-Our most recent benchmark (January 2026\*) shows significant performance metrics across different platforms.
+Our most recent benchmark (January 2026) shows significant performance performance metrics across different platforms.
 
 **Key Highlights:**
 
-- **Fastest Event Processing**: Goldsky (3.34 min), Envio HyperIndex (6.94 min) and Sentio (11.02 min)
-- **Top Block Processing**: Subsquid (0.25 min, 13% coverage), Goldsky (0.54 min, 100% coverage) and Sentio (2.51 min)
-- **Fastest RPC-Enriched Indexing**: Goldsky (1.49 min), Sentio (7.78 min) and Envio (8.54 min) 
-- **Best Trace Processing**: Goldsky (0.75 min), Sentio Subgraph (2.17 min) and Sentio (2.54 min)
+- **Fastest Event Processing**: Envio HyperIndex (6.94 min) and Sentio (11.02 min)
+- **Top Block Processing**: Subsquid (0.25 min) and Sentio (2.51 min)
+- **Best Trace Processing**: Sentio Subgraph (2.17 min) and Sentio (2.54 min)
 - **Raw Data Engine**: Envio HyperSync provides massive throughput (100k blocks in 3s) for non-indexing use cases
 
 See the [complete benchmark results](#performance-results) for detailed timing data.
-
-\* Goldsky metrics added June 2026.
 
 ## Test Methodology
 
@@ -71,26 +68,24 @@ Our benchmark cases are designed to test different aspects of indexer performanc
 - **Ponder**: A framework for building and deploying blockchain data APIs
 - **Subsquid**: A framework for building GraphQL APIs on top of blockchain data
 - **Subgraph**: The Graph Protocol's indexing solution for building open APIs
-- **Goldsky**: A high-performance blockchain data platform offering both subgraph indexing and real-time streaming data pipelines, delivering onchain data directly into your database, data warehouse, and downstream applications at scale
 
 ### Use Cases
 
 - Use HyperSync directly when you need raw blockchain data at maximum speed
 - Use HyperIndex when you need a full-featured indexing solution
-- Use Goldsky when you want managed cloud indexing — streaming SQL pipelines or subgraphs — with no infrastructure to operate
 
 ### Supported Chains
 
-| Chain | Sentio | Envio | Ponder | Subsquid | Subgraph | Goldsky |
-|-------|--------|-------|--------|----------|----------|---------|
-| EVM* | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Sui | ✅ | ❌ | ❌ | ❌ | ❌ | ❓ |
-| Aptos | ✅ | ❌ | ❌ | ❌ | ❌ | ❓ |
-| StarkNet | ✅ | ❌ | ❌ | ✅ | ✅ | ✅ |
-| Cosmos | ⚠️ | ❌ | ❌ | ❌ | ❌ | ❓ |
-| Solana | ⚠️ | ❌ | ❌ | ✅ | ⚠️ | ❓ |
-| Bitcoin | ⚠️ | ❌ | ❌ | ❌ | ✅ | ❓ |
-| Fuel | ✅ | ✅ | ❌ | ✅ | ❌ | ❓ |
+| Chain | Sentio | Envio | Ponder | Subsquid | Subgraph |
+|-------|--------|-------|--------|----------|----------|
+| EVM* | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Sui | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Aptos | ✅ | ❌ | ❌ | ❌ | ❌ |
+| StarkNet | ✅ | ❌ | ❌ | ✅ | ✅ |
+| Cosmos | ⚠️ | ❌ | ❌ | ❌ | ❌ |
+| Solana | ⚠️ | ❌ | ❌ | ✅ | ⚠️ |
+| Bitcoin | ⚠️ | ❌ | ❌ | ❌ | ✅ |
+| Fuel | ✅ | ✅ | ❌ | ✅ | ❌ |
 
 \* Including many EVM-compatible L1/L2 chains
 
@@ -98,17 +93,17 @@ Our benchmark cases are designed to test different aspects of indexer performanc
 
 ### Supported Features
 
-| Feature | Sentio | Envio | Ponder | Subsquid | Subgraph | Goldsky |
-|---------|--------|-------|--------|----------|----------|---------|
-| Event Handler | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Block Handler | ✅ | ⚠️$ | ✅ | ✅ | ✅ | ✅ |
-| Transaction Handler | ✅ | ⚠️$ | ✅ | ✅ | ❌ | ✅ |
-| Trace/Internal Tx Handler | ✅ | ⚠️$ | ❌ | ✅$$ | ⚠️† | ✅ |
-| Native RPC | ✅ | ⚠️$ | ❌ | ❌ | ❌ | ✅ |
-| SQL Querying | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ |
-| GraphQL API | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ |
-| Factory Template Dynamic Registation | ✅ | ✅ | ✅ | ⚠️* | ✅ | ✅ |
-| Batch RPC calls | ✅^ | ✅^ | ✅^ | ✅^ | ❌ | ✅^^ |
+| Feature | Sentio | Envio | Ponder | Subsquid | Subgraph |
+|---------|--------|-------|--------|----------|----------|
+| Event Handler | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Block Handler | ✅ | ⚠️$ | ✅ | ✅ | ✅ |
+| Transaction Handler | ✅ | ⚠️$ | ✅ | ✅ | ❌ |
+| Trace/Internal Tx Handler | ✅ | ⚠️$ | ❌ | ✅$$ | ⚠️† |
+| Native RPC | ✅ | ⚠️$ | ❌ | ❌ | ❌ |
+| SQL Querying | ✅ | ✅ | ✅ | ✅ | ❌ |
+| GraphQL API | ✅ | ✅ | ✅ | ❌ | ✅ |
+| Factory Template Dynamic Registation | ✅ | ✅ | ✅ | ⚠️* | ✅ |
+| Batch RPC calls | ✅^ | ✅^ | ✅^ | ✅^ | ❌ |
 
 ⚠️ Limited capability or requires additional configuration
 
@@ -122,8 +117,6 @@ $$ Subsquid does have access internal call trace as bytes, however, it requires 
 
 ^ Rely on multicall contract deployed by MakerDAO for batch RPC calls, with Envio using built-in platform infrastructure and others using multicall
 
-^^ Uses Goldsky Edge for RPC multicall
-
 This benchmark provides a comparative analysis of indexer performance across different scenarios, helping developers choose the most appropriate indexing solution for their specific needs.
 
 ### Performance Results
@@ -132,18 +125,17 @@ This benchmark provides a comparative analysis of indexer performance across dif
 
 Full indexing frameworks including database storage and API generation.
 
-| Case | Sentio | Envio HyperIndex | Ponder | Subsquid | Subgraph (Hosted) | Sentio Subgraph | Goldsky |
-|------|--------|------------------|--------|----------|-------------------|-----------------|---------------|
-| case_1_lbtc_event_only | **11.02 min** | 6.94 min | 34.80 min | 40.94 min | 188.79 min | 14.90 min | **3.34 min** |
-| case_2_lbtc_full | **7.78 min** | 8.54 min | 64.86 min | 46.85 min | 66.41 min | 29.23 min | **1.49 min** |
-| case_3_ethereum_block | **2.51 min** | N/A | 9.63 min | 0.25 min | 50.58 min | 2.67 min | **0.54 min** |
-| case_4_on_transaction | **22.12 min** | N/A | Timeout§ | 1.25 min | N/A | N/A | **3.18 min** |
-| case_5_on_trace | **2.54 min** | N/A | 74.71 min | 7.42 min | 17.81 min | 2.17 min | **0.75 min** |
-| case_6_template | **14.36 min** | 1.92 min | 6.44 min | 5.34 min | 16.83 min | 4.26 min | **0.22 min** |
+| Case | Sentio | Envio HyperIndex | Ponder | Subsquid | Subgraph (Hosted) | Sentio Subgraph |
+|------|--------|------------------|--------|----------|-------------------|-----------------|
+| case_1_lbtc_event_only | **11.02 min** | 6.94 min | 34.80 min | 40.94 min | 188.79 min | 14.90 min |
+| case_2_lbtc_full | **7.78 min** | 8.54 min | 64.86 min | 46.85 min | 66.41 min | 29.23 min |
+| case_3_ethereum_block | **2.51 min** | N/A | 9.63 min | 0.25 min | 50.58 min | 2.67 min |
+| case_4_on_transaction | **22.12 min** | N/A | Timeout§ | 1.25 min | N/A | N/A |
+| case_5_on_trace | **2.54 min** | N/A | 74.71 min | 7.42 min | 17.81 min | 2.17 min |
+| case_6_template | **14.36 min** | 1.92 min | 6.44 min | 5.34 min | 16.83 min | 4.26 min |
 
 > **Notes**:
 > - § Ponder timed out after 2 hours with only 2.5% progress
-> - Goldsky times are **wall-clock** (cloud: deploy → last row, provisioning-inclusive — directly comparable to the other cloud tools Sentio / Sentio Subgraph / Subgraph). The local tools (Envio, Ponder, Subsquid) report spawn→done, which excludes provisioning.
 
 #### Envio HyperSync (Raw Data Engine)
 
@@ -157,14 +149,14 @@ HyperSync is a raw data extraction engine, not a full indexer. It does not handl
 
 ### Data Completeness
 
-| Case | Expected Records | Sentio | Envio | Ponder | Subsquid | Subgraph | Sentio Subgraph | Goldsky |
-|------|------------------|--------|-------|--------|----------|----------|-----------------|---------------|
-| case_1_lbtc_event_only | 294,278 | ✅ 294,278 | ✅ 294,278 | ✅ 294,278 | ✅ 294,278 | ✅ 294,278 | ✅ 294,278 | ✅ 294,278 |
-| case_2_lbtc_full | 7,634 | ✅ 7,634  | ✅ 7,634 | ✅ 7,634 | ✅ 7,634 | ✅ 7634 | ✅ 7634 | ✅ 7,634 |
-| case_3_ethereum_block | 100,001 | ✅ 10,001 | ✅ 100,001 | ✅ 100,001 | ✅ 100,001 | ✅ 100,001 | ✅ 100,001 | ✅ 100,001 |
-| case_4_on_transaction | 1,696,641 | ✅ 1,696,641 | ✅ 1,696,423**| N/A | ✅ 1,696,641 | N/A | N/A | ✅ 1,696,641 |
-| case_5_on_trace | 50,191 | ✅ 50,191 | ✅ 50,191 | ⚠️ 44,400 | ✅ 50,191 | ⚠️ 29,058‡ | ⚠️ 45,895 | ✅ 50,191 |
-| case_6_template | 35,039 | 75,951§ | ✅ 35,039 | 182,767§ | ⚠️ 33,972 | ✅ 35,039 | 75,951§ | ✅ 35,039 |
+| Case | Expected Records | Sentio | Envio | Ponder | Subsquid | Subgraph | Sentio Subgraph |
+|------|------------------|--------|-------|--------|----------|----------|-----------------|
+| case_1_lbtc_event_only | 294,278 | ✅ 294,278 | ✅ 294,278 | ✅ 294,278 | ✅ 294,278 | ✅ 294,278 | ✅ 294,278 |
+| case_2_lbtc_full | 7,634 | ✅ 7,634  | ✅ 7,634 | ✅ 7,634 | ✅ 7,634 | ✅ 7634 | ✅ 7634 |
+| case_3_ethereum_block | 100,001 | ✅ 10,001 | ✅ 100,001 | ✅ 100,001 | ✅ 100,001 | ✅ 100,001 | ✅ 100,001 |
+| case_4_on_transaction | 1,696,641 | ✅ 1,696,641 | ✅ 1,696,423**| N/A | ✅ 1,696,641 | N/A | N/A |
+| case_5_on_trace | 50,191 | ✅ 50,191 | ✅ 50,191 | ⚠️ 44,400 | ✅ 50,191 | ⚠️ 29,058‡ | ⚠️ 45,895 |
+| case_6_template | 35,039 | 75,951§ | ✅ 35,039 | 182,767§ | ⚠️ 33,972 | ✅ 35,039 | 75,951§ |
 
 > **Notes**:
 > - †† Subsquid missing 86.84% of blocks in case_3
@@ -175,17 +167,17 @@ HyperSync is a raw data extraction engine, not a full indexer. It does not handl
 ### Key Observations
 
 1. **Performance Leaders**:
-   - **Event Processing**: Goldsky leads the pack, followed gy Envio HyperIndex and Sentio.
-   - **Block/Trace/Transaction Processing**: Goldsky is the fastest full-coverage indexer; Sentio, Sentio Subgraph, and Subsquid also perform well for specialized data needs.
-   - **Raw Data Fetching**: Envio HyperSync is the only dedicated raw-data engine benchmarked here (a separate category from full indexing); Goldsky's full indexing-to-database times are competitive with it, and faster on case 5.
+   - **Event Processing**: Envio HyperIndex and Sentio lead the pack.
+   - **Block/Trace/Transaction Processing**: Sentio, Sentio Subgraph, and Subsquid perform well for specialized data needs.
+   - **Raw Data Fetching**: Envio HyperSync is in a league of its own for non-indexing raw data retrieval.
 
 2. **Data Completeness**:
-   - Most modern indexers (Sentio, Envio, Goldsky, Ponder) achieve 100% data completeness for standard cases.
-   - Goldsky hit 100% on trace and template use cases. Trace-level indexing remains challenging for some, with Subgraph finding significantly fewer traces (~58%).
+   - Most modern indexers (Sentio, Envio, Ponder) achieve 100% data completeness for standard cases.
+   - Trace-level indexing remains challenging, with Subgraph finding significantly fewer traces (~58%).
    - Subsquid showed gaps in block processing coverage (case 3).
 
 3. **Infrastructure**:
-   - Cloud-native solutions (Sentio, Sentio Subgraph, Goldsky) generally offer strong consistency and ease of use.
+   - Cloud-native solutions (Sentio, Sentio Subgraph) generally offer strong consistency and ease of use.
    - Local solutions with optimized RPCs (Envio, Ponder) are highly competitive but depend on local hardware resources.
 
 ## Exported Data
