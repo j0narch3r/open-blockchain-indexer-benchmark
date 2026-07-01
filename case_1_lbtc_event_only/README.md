@@ -33,7 +33,7 @@ The benchmark requires each indexer to:
 | Subsquid | 10m              | 296,734        | |
 | Subgraph | 3h9m             | 296,734        | |
 | Sentio(v3.0.0-rc9) | 13.06m | 296,278 | [Project link](https://app.sentio.xyz/sentio/case_1_lbtc_event_only/) |
-| Goldsky | 3.34m | 294,278 | 100% complete |
+| Goldsky | 3.34m | 294,278 | |
 
 ^ Goldsky data generated June 2026.
 
