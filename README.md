@@ -136,13 +136,14 @@ Full indexing frameworks including database storage and API generation.
 |------|--------|------------------|--------|----------|-------------------|-----------------|---------------|
 | case_1_lbtc_event_only | 11.02 min | 6.94 min | 34.80 min | 40.94 min | 188.79 min | 14.90 min | **1.38 min** |
 | case_2_lbtc_full | 7.78 min | 8.54 min | 64.86 min | 46.85 min | 66.41 min | 29.23 min | **2.59 min** |
-| case_3_ethereum_block | 2.51 min | N/A | 9.63 min | 0.25 min | 50.58 min | 2.67 min | **0.33 min (19.7s)** |
+| case_3_ethereum_block | 2.51 min | N/A | 9.63 min | 0.25 min †† | 50.58 min | 2.67 min | **0.33 min (19.7s)** |
 | case_4_on_transaction | 22.12 min | N/A | Timeout§ | **1.25 min** | N/A | N/A | 3.76 min |
 | case_5_on_trace | 2.54 min | N/A | 74.71 min | 7.42 min | 17.81 min | 2.17 min | **0.75 min (45.0s)** |
 | case_6_template | 14.36 min | 1.92 min | 6.44 min | 5.34 min | 16.83 min | 4.26 min | **0.25 min (15.2s)** |
 
 > **Notes**:
 > - § Ponder timed out after 2 hours with only 2.5% progress
+> - †† Subsquid missing 86.84% of blocks in case_3
 > - Goldsky times are **wall-clock** (cloud: deploy → last row, provisioning-inclusive — directly comparable to the other cloud tools Sentio / Sentio Subgraph / Subgraph). The local tools (Envio, Ponder, Subsquid) report spawn→done, which excludes provisioning.
 
 #### Envio HyperSync (Raw Data Engine)
@@ -161,7 +162,7 @@ HyperSync is a raw data extraction engine, not a full indexer. It does not handl
 |------|------------------|--------|-------|--------|----------|----------|-----------------|---------------|
 | case_1_lbtc_event_only | 294,278 | ✅ 294,278 | ✅ 294,278 | ✅ 294,278 | ✅ 294,278 | ✅ 294,278 | ✅ 294,278 | ✅ 294,278 |
 | case_2_lbtc_full | 7,634 | ✅ 7,634  | ✅ 7,634 | ✅ 7,634 | ✅ 7,634 | ✅ 7634 | ✅ 7634 | ✅ 7,634 |
-| case_3_ethereum_block | 100,001 | ✅ 10,001 | ✅ 100,001 | ✅ 100,001 | ✅ 100,001 | ✅ 100,001 | ✅ 100,001 | ✅ 100,001 |
+| case_3_ethereum_block | 100,001 | ✅ 100,001 | ✅ 100,001 | ✅ 100,001 | ⚠️ 13,156 | ✅ 100,001 | ✅ 100,001 | ✅ 100,001 |
 | case_4_on_transaction | 1,696,641 | ✅ 1,696,641 | ✅ 1,696,423**| N/A | ✅ 1,696,641 | N/A | N/A | ✅ 1,696,641 |
 | case_5_on_trace | 50,191 | ✅ 50,191 | ✅ 50,191 | ⚠️ 44,400 | ✅ 50,191 | ⚠️ 29,058‡ | ⚠️ 45,895 | ✅ 50,191 |
 | case_6_template | 35,039 | 75,951§ | ✅ 35,039 | 182,767§ | ⚠️ 33,972 | ✅ 35,039 | 75,951§ | ✅ 35,039 |
