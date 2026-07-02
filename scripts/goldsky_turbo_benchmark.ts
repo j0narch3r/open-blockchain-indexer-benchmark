@@ -303,23 +303,21 @@ function saveResults(results: BenchmarkResult[]): void {
     const jsonPath = join(__dirname, "goldsky_turbo_benchmark_report.json");
     const mdPath = join(__dirname, "goldsky_turbo_benchmark_report.md");
 
-    // merge with any prior report so invocations accumulate. Key = caseId + iteration +
-    // imageTag, so a config_overrides run sits
-    // BESIDE the default-image baseline for a direct comparison rather than overwriting it.
+    // merge with any prior report so invocations accumulate. Key = caseId + iteration.
     let merged: BenchmarkResult[] = [];
     if (existsSync(jsonPath)) {
         try { merged = JSON.parse(readFileSync(jsonPath, "utf8")); } catch { merged = []; }
     }
-    const tag = (m: BenchmarkResult) => m.imageTag || "default";
     for (const r of results) {
-        const i = merged.findIndex((m) => m.caseId === r.caseId && m.iteration === r.iteration && tag(m) === tag(r));
+        const i = merged.findIndex((m) => m.caseId === r.caseId && m.iteration === r.iteration);
         if (i >= 0) merged[i] = r; else merged.push(r);
     }
-    merged.sort((a, b) => a.caseId.localeCompare(b.caseId) || tag(a).localeCompare(tag(b)) || a.iteration - b.iteration);
+    merged.sort((a, b) => a.caseId.localeCompare(b.caseId) || a.iteration - b.iteration);
+    for (const m of merged) delete (m as any).imageTag;
     writeFileSync(jsonPath, JSON.stringify(merged, null, 2));
 
     const rows = merged.map((r) =>
-        `| ${r.caseId} | ${r.imageTag || "default"} | ${r.iteration} | ${r.durationSeconds.toFixed(1)} | ${(r.durationSeconds / 60).toFixed(2)} | ${(r.indexingSeconds ?? 0).toFixed(1)} | ${((r.indexingSeconds ?? 0) / 60).toFixed(2)} | ${r.blocksPerSecond.toFixed(0)} | ${r.recordCount} | ${r.expectedCount} | ${r.complete ? "✅" : "❌"} | ${r.error ?? "-"} |`
+        `| ${r.caseId} | ${r.iteration} | ${r.durationSeconds.toFixed(1)} | ${(r.durationSeconds / 60).toFixed(2)} | ${(r.indexingSeconds ?? 0).toFixed(1)} | ${((r.indexingSeconds ?? 0) / 60).toFixed(2)} | ${r.blocksPerSecond.toFixed(0)} | ${r.recordCount} | ${r.expectedCount} | ${r.complete ? "✅" : "❌"} | ${r.error ?? "-"} |`
     ).join("\n");
     const md = `# Goldsky Turbo Benchmark Report
 
@@ -332,11 +330,8 @@ Generated: ${new Date().toISOString()}
   clock — skew-free, provisioning excluded). Compare against **local** tools (Envio, Ponder,
   Subsquid), whose published times are spawn→done with negligible provisioning.
 
-The **Image** column is the \`config_overrides.image_tag\` used (\`default\` = stock image); override
-runs accumulate beside the baseline for comparison.
-
-| Case | Image | Iter | Wall-clock (s) | Wall-clock (min) | Indexing (s) | Indexing (min) | Idx Blocks/s | Records | Expected | Complete | Error |
-|------|-------|------|----------------|------------------|--------------|----------------|--------------|---------|----------|----------|-------|
+| Case | Iter | Wall-clock (s) | Wall-clock (min) | Indexing (s) | Indexing (min) | Idx Blocks/s | Records | Expected | Complete | Error |
+|------|------|----------------|------------------|--------------|----------------|--------------|---------|----------|----------|-------|
 ${rows}
 `;
     writeFileSync(mdPath, md);
