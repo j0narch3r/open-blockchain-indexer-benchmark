@@ -87,7 +87,7 @@ Each platform handles periodic updates differently:
 | Sqd | 34m | 7,634 | 1770.73s | 0.88s | 56268.61s |-|
 | Subgraph | 1h3m | 7,634 | - | - | - |-|
 | Sentio Subgraph | 56m | 7,634 | - | - | - ||
-| Goldsky | 1.49m | 7,634 | - | - | - | - |
+| Goldsky | 2.59m | 7,634 | - | - | - | - |
 
 ^ Goldsky data generated June 2026.
 

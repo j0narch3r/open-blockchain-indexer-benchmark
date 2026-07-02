@@ -21,7 +21,7 @@ This benchmark tests the performance of various indexers when processing Uniswap
 | Subgraph   | 19m            | 35,039  | 19000000-19010000 |
 | Ponder     | 21m            | 35,039  | 19000000-19010000 |
 | Sentio v3.0.0-rc.9 | 15m            | 232(Pairs), 73994(Swap events)  | 19000000-19010000 |
-| Goldsky | 0.22m | 35,039 | 19000000-19010000 |
+| Goldsky | 0.25m (15.2s) | 35,039 | 19000000-19010000 |
 
 ^ Goldsky data generated June 2026.
 
