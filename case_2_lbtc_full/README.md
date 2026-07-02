@@ -112,7 +112,7 @@ Each platform handles periodic updates differently:
    - Sqd shows moderate storage time at 56268.61s
 
 4. **Goldsky**:
-   - Completed the combined balances + points workload (7,634 accounts) in 1.49 min via Edge RPC
+   - Completed the combined balances + points workload (7,634 accounts) in 2.59 min via Edge RPC
 
 ### Points Distribution Analysis
 

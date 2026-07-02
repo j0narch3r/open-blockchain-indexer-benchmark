@@ -56,7 +56,7 @@ The distribution of factory events and pairs across platforms shows some variati
    - The difference in Subsquid's record count is due to template configuration limitations
 
 2. **Performance Differences**:
-   - **Goldsky** led the pack, indexing all swaps in ~13 seconds
+   - **Goldsky** led the pack, indexing all swaps in ~15 seconds
    - **Envio HyperIndex** also demonstrated exceptional performance at 30 seconds
    - **Subsquid** showed excellent performance at 2 minutes
    - **Sentio** and **Subgraph** completed in 19 minutes

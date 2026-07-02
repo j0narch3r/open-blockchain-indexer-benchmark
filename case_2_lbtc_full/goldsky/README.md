@@ -81,15 +81,15 @@ SELECT count(*) FROM goldsky_case2_balances;   -- distinct accounts
 
 Goldsky (cloud, `resource_size: m`)
 
-| Wall-clock | Indexing span | Records |
+| Time | Time (actual indexing only) | Records |
 |---|---|---|
-| **1.49 min** | 0.58 min | 7,634 ✅ |
+| **2.59 min** | 2.03 min | 7,634 |
 
 Against the published indexers (Jan 2026 report):
 
 | Indexer | Time | Records |
 |---|---|---|
-| **Goldsky** | **1.49 min** | 7,634 ✅ |
+| **Goldsky** | **2.59 min** | 7,634 |
 | Sentio | 7.78 min | 7,634 |
 | Envio HyperIndex | 8.54 min | 7,634 |
 | Sentio Subgraph | 29.23 min | 7,634 |

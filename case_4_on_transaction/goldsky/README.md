@@ -60,16 +60,16 @@ SELECT count(*) FROM goldsky_case4;
 
 Goldsky (cloud, `resource_size: m`)
 
-| Wall-clock | Indexing span | Records |
+| Time | Time (actual indexing only) | Records |
 |---|---|---|
-| **3.18 min** | 2.48 min | 1,696,641 ✅ |
+| **3.76 min** | 2.24 min | 1,696,641 |
 
 Against the published indexers (Jan 2026 report):
 
 | Indexer | Time | Records |
 |---|---|---|
 | Subsquid | 1.25 min | 1,696,641 |
-| **Goldsky** | **3.18 min** | 1,696,641 ✅ |
+| **Goldsky** | **3.76 min** | 1,696,641 |
 | Sentio | 22.12 min | 1,696,641 |
 | Ponder | Timeout (2h, 2.5%) | — |
 | Envio HyperIndex | N/A | 1,696,423 |

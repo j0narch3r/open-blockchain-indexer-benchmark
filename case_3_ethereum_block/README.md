@@ -78,7 +78,7 @@ We compared all platforms pairwise, focusing on three key fields:
    - **Sparse Coverage**: Subsquid has significantly lower coverage with only 13,156 blocks, primarily in the 40,000-100,000 range.
 
 3. **Performance Differences**:
-   - **Goldsky** demonstrated the fastest raw processing (6 seconds), beating Envio Hypersync (7.9 seconds) which does not support traditional block handlers
+   - **Goldsky** demonstrated the fastest raw processing (6.2 seconds), beating Envio Hypersync (7.9 seconds) which does not support traditional block handlers
    - **Sentio**, **Ponder**, and **Subgraph** all completed indexing in reasonable timeframes (18-33 minutes)
    - **Subsquid** completed quickly (1 minute) but with significant data gaps
    - **Goldsky** indexed all blocks in 0.33 min — the fastest complete indexer run
