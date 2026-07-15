@@ -62,13 +62,13 @@ Goldsky (cloud, `resource_size: m`)
 
 | Time | Time (actual indexing only) | Records |
 |---|---|---|
-| **0.75 min (45.0s)** | 0.06 min (3.5s) | 50,191 |
+| **0.98 min (58.6s)** | 0.05 min (3.2s) | 50,191 |
 
 Against the published indexers (Jan 2026 report):
 
 | Indexer | Time | Records |
 |---|---|---|
-| **Goldsky** | **0.75 min (45.0s)** | **50,191** |
+| **Goldsky** | **0.98 min (58.6s)** | **50,191** |
 | Sentio Subgraph | 2.17 min | 45,895 ⚠️ |
 | Sentio | 2.54 min | 50,191 |
 | Subsquid | 7.42 min | 50,191 |

@@ -21,9 +21,9 @@ This benchmark tests the performance of various indexers when processing Uniswap
 | Subgraph   | 19m            | 35,039  | 19000000-19010000 |
 | Ponder     | 21m            | 35,039  | 19000000-19010000 |
 | Sentio v3.0.0-rc.9 | 15m            | 232(Pairs), 73994(Swap events)  | 19000000-19010000 |
-| Goldsky | 0.25m (15.2s) | 35,039 | 19000000-19010000 |
+| Goldsky | 0.42m (25.1s) | 35,039 | 19000000-19010000 |
 
-^ Goldsky data generated June 2026.
+^ Goldsky data generated July 2026.
 
 ## Data Distribution Details
 
@@ -56,7 +56,7 @@ The distribution of factory events and pairs across platforms shows some variati
    - The difference in Subsquid's record count is due to template configuration limitations
 
 2. **Performance Differences**:
-   - **Goldsky** led the pack, indexing all swaps in ~15 seconds
+   - **Goldsky** led the pack, indexing all swaps in ~25 seconds
    - **Envio HyperIndex** also demonstrated exceptional performance at 30 seconds
    - **Subsquid** showed excellent performance at 2 minutes
    - **Sentio** and **Subgraph** completed in 19 minutes

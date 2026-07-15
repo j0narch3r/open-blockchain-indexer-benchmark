@@ -87,9 +87,9 @@ Each platform handles periodic updates differently:
 | Sqd | 34m | 7,634 | 1770.73s | 0.88s | 56268.61s |-|
 | Subgraph | 1h3m | 7,634 | - | - | - |-|
 | Sentio Subgraph | 56m | 7,634 | - | - | - ||
-| Goldsky | 2.59m | 7,634 | - | - | - | - |
+| Goldsky | 1.14m | 7,634 | - | - | - | - |
 
-^ Goldsky data generated June 2026.
+^ Goldsky data generated July 2026.
 
 ### Performance Analysis
 
@@ -112,7 +112,7 @@ Each platform handles periodic updates differently:
    - Sqd shows moderate storage time at 56268.61s
 
 4. **Goldsky**:
-   - Completed the combined balances + points workload (7,634 accounts) in 2.59 min via Edge RPC
+   - Completed the combined balances + points workload (7,634 accounts) in 1.14 min via Edge RPC
 
 ### Points Distribution Analysis
 

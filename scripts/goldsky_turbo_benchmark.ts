@@ -143,7 +143,6 @@ interface BenchmarkResult {
     recordCount: number;
     expectedCount: number;
     complete: boolean;           
-    imageTag: string;            
     error?: string;
 }
 
@@ -152,7 +151,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const sh = (s: number) => `${(s / 60).toFixed(2)}m`;
 
 
-function prepareRun(cfg: CaseConfig, iteration: number, imageTag = ""): { path: string; name: string; countTable: string } {
+function prepareRun(cfg: CaseConfig, iteration: number): { path: string; name: string; countTable: string } {
     const stamp = Date.now().toString(36);
     const sfxName = `-i${iteration}-${stamp}`;     
     const sfxTable = `_i${iteration}_${stamp}`;    
@@ -160,9 +159,7 @@ function prepareRun(cfg: CaseConfig, iteration: number, imageTag = ""): { path: 
     let text = readFileSync(join(REPO_ROOT, cfg.yaml), "utf8");
     const name = `${cfg.pipelineName}${sfxName}`;
 
-    const overrideBlock = (imageTag && !/^config_overrides:/m.test(text))
-        ? `\nconfig_overrides:\n  image_tag: ${imageTag}` : "";
-    text = text.replace(/^name:\s*.+$/m, `name: ${name}${overrideBlock}`);
+    text = text.replace(/^name:\s*.+$/m, `name: ${name}`);
 
     let countTable = "";
     text = text.replace(/^(\s*table:\s*)(\S+)\s*$/gm, (_m, k: string, v: string) => {
@@ -208,7 +205,7 @@ function cleanup(name: string): void {
     try { execSync(`goldsky turbo delete ${name}`, { stdio: "pipe" }); } catch { /* job auto-deletes anyway */ }
 }
 
-async function runBenchmark(sql: any, cfg: CaseConfig, iteration: number, imageTag = ""): Promise<BenchmarkResult> {
+async function runBenchmark(sql: any, cfg: CaseConfig, iteration: number): Promise<BenchmarkResult> {
     const totalBlocks = cfg.endBlock - cfg.startBlock;
     console.log(`\n[${cfg.id}] iter ${iteration} — ${cfg.caseName} | blocks ${cfg.startBlock}->${cfg.endBlock} (${totalBlocks})`);
 
@@ -218,12 +215,11 @@ async function runBenchmark(sql: any, cfg: CaseConfig, iteration: number, imageT
         startTime: startTime.toISOString(), endTime: startTime.toISOString(),
         durationSeconds: 0, indexingSeconds: 0, startBlock: cfg.startBlock, endBlock: cfg.endBlock, totalBlocks,
         blocksPerSecond: 0, recordCount: 0, expectedCount: cfg.expected, complete: false,
-        imageTag: imageTag || "default",
     };
 
     let name = "";
     try {
-        const prep = prepareRun(cfg, iteration, imageTag);
+        const prep = prepareRun(cfg, iteration);
         name = prep.name; base.slug = name;
         const countTable = prep.countTable;
 
@@ -313,7 +309,6 @@ function saveResults(results: BenchmarkResult[]): void {
         if (i >= 0) merged[i] = r; else merged.push(r);
     }
     merged.sort((a, b) => a.caseId.localeCompare(b.caseId) || a.iteration - b.iteration);
-    for (const m of merged) delete (m as any).imageTag;
     writeFileSync(jsonPath, JSON.stringify(merged, null, 2));
 
     const rows = merged.map((r) =>
@@ -344,14 +339,9 @@ async function main() {
     const sel = argv.find((a) => !a.startsWith("--")) ?? "";
     const iterFlag = argv.indexOf("--iterations");
     const iterations = iterFlag >= 0 ? parseInt(argv[iterFlag + 1], 10) || 1 : 1;
-    // --image-tag <tag>: inject `config_overrides: { image_tag: <tag> }` at deploy time. 
-    // Tagged in the report + part of the merge key, so an override run sits 
-    // beside the baseline for comparison. "" = default image.
-    const imgFlag = argv.indexOf("--image-tag");
-    const imageTag = imgFlag >= 0 ? (argv[imgFlag + 1] ?? "") : "";
 
     if (!sel) {
-        console.error("usage: bun scripts/goldsky_turbo_benchmark.ts <caseId|all> [--iterations N] [--image-tag <tag>]");
+        console.error("usage: bun scripts/goldsky_turbo_benchmark.ts <caseId|all> [--iterations N]");
         console.error(`       caseId one of: ${Object.keys(CASES).join(", ")}`);
         process.exit(1);
     }
@@ -364,8 +354,8 @@ async function main() {
         for (const c of selected) {
             const cfg = CASES[c];
             try {
-                const prep = prepareRun(cfg, 1, imageTag);
-                console.log(`[${cfg.id}] name=${prep.name}  countTable=${prep.countTable}  image_tag=${imageTag || "(default)"}  skipValidation=${!!cfg.skipValidation}  cmd: goldsky turbo apply ${prep.path}${cfg.skipValidation ? " --skip-validation" : ""}`);
+                const prep = prepareRun(cfg, 1);
+                console.log(`[${cfg.id}] name=${prep.name}  countTable=${prep.countTable}  skipValidation=${!!cfg.skipValidation}  cmd: goldsky turbo apply ${prep.path}${cfg.skipValidation ? " --skip-validation" : ""}`);
             } catch (e: any) {
                 console.log(`[${cfg.id}] PREP ERROR: ${e.message}`);
             }
@@ -381,7 +371,7 @@ async function main() {
     try {
         for (const c of selected) {
             for (let i = 1; i <= iterations; i++) {
-                const r = await runBenchmark(sql, CASES[c], i, imageTag);
+                const r = await runBenchmark(sql, CASES[c], i);
                 results.push(r);
                 saveResults([r]); // intermediate save, like the canonical runners
             }

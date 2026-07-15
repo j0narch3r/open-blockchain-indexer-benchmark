@@ -21,9 +21,9 @@ This benchmark tests the performance of various indexers when processing transac
 | Ponder   | 33m            | 1,696,423 | 22,280,000-22,289,999 |
 | Subgraph | N/A            | N/A       | N/A                   | 
 | Sentio (3.0.0-rc.9) | 35.6m            | 1,696,641 | 22,280,000-22,290,000 |
-| Goldsky | 3.76m | 1,696,641 | 22,280,000-22,290,000 |
+| Goldsky | 4.67m | 1,696,641 | 22,280,000-22,290,000 |
 
-^ Goldsky data generated June 2026.
+^ Goldsky data generated July 2026.
 
 ## Data Distribution Details
 
@@ -48,7 +48,7 @@ The distribution of transactions across platforms is remarkably consistent, with
 
 2. **Performance Differences**:
    - **Envio with HyperSync** demonstrated exceptional performance at 1 minute 26 seconds, processing transactions at a rate of approximately 20,000 transactions per second.
-   - **Goldsky** showed excellent performance at 3.76 minutes, making it the fastest among the traditional indexers, followed by Subsquid at 5 minutes.
+   - **Goldsky** showed excellent performance at 4.67 minutes, making it the fastest among the traditional indexers, followed by Subsquid at 5 minutes.
    - **Sentio** completed in 23 minutes with reliable performance.
    - **Ponder** processed all transactions in 33 minutes.
 

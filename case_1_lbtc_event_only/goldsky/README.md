@@ -72,13 +72,13 @@ Goldsky (cloud, `resource_size: m`)
 
 | Time | Time (actual indexing only) | Records |
 |---|---|---|
-| **1.38 min** | 0.43 min (25.7s) | 294,278 |
+| **1.02 min** | 0.28 min (17.1s) | 294,278 |
 
 Against the published indexers (Jan 2026 report):
 
 | Indexer | Time | Records |
 |---|---|---|
-| **Goldsky** | **1.38 min** | 294,278 |
+| **Goldsky** | **1.02 min** | 294,278 |
 | Envio HyperIndex | 6.94 min | 294,278 |
 | Sentio | 11.02 min | 294,278 |
 | Sentio Subgraph | 14.90 min | 294,278 |

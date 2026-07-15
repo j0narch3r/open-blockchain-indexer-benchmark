@@ -19,15 +19,15 @@ Our most recent benchmark (January 2026\*) shows significant performance metrics
 
 **Key Highlights:**
 
-- **Fastest Event Processing**: Goldsky (1.38 min), Envio HyperIndex (6.94 min) and Sentio (11.02 min)
-- **Top Block Processing**: Subsquid (0.25 min, 13% coverage), Goldsky (0.33 min, 100% coverage) and Sentio (2.51 min)
-- **Fastest RPC-Enriched Indexing**: Goldsky (2.59 min), Sentio (7.78 min) and Envio (8.54 min) 
-- **Best Trace Processing**: Goldsky (0.75 min), Sentio Subgraph (2.17 min) and Sentio (2.54 min)
+- **Fastest Event Processing**: Goldsky (1.02 min), Envio HyperIndex (6.94 min) and Sentio (11.02 min)
+- **Top Block Processing**: Subsquid (0.25 min, 13% coverage), Goldsky (0.57 min, 100% coverage) and Sentio (2.51 min)
+- **Fastest RPC-Enriched Indexing**: Goldsky (1.14 min), Sentio (7.78 min) and Envio (8.54 min) 
+- **Best Trace Processing**: Goldsky (0.98 min), Sentio Subgraph (2.17 min) and Sentio (2.54 min)
 - **Raw Data Engine**: Envio HyperSync provides massive throughput (100k blocks in 3s) for non-indexing use cases
 
 See the [complete benchmark results](#performance-results) for detailed timing data.
 
-\* Goldsky metrics added June 2026.
+\* Goldsky metrics added July 2026.
 
 ## Test Methodology
 
@@ -134,12 +134,12 @@ Full indexing frameworks including database storage and API generation.
 
 | Case | Sentio | Envio HyperIndex | Ponder | Subsquid | Subgraph (Hosted) | Sentio Subgraph | Goldsky |
 |------|--------|------------------|--------|----------|-------------------|-----------------|---------------|
-| case_1_lbtc_event_only | 11.02 min | 6.94 min | 34.80 min | 40.94 min | 188.79 min | 14.90 min | **1.38 min** |
-| case_2_lbtc_full | 7.78 min | 8.54 min | 64.86 min | 46.85 min | 66.41 min | 29.23 min | **2.59 min** |
-| case_3_ethereum_block | 2.51 min | N/A | 9.63 min | 0.25 min †† | 50.58 min | 2.67 min | **0.33 min (19.7s)** |
-| case_4_on_transaction | 22.12 min | N/A | Timeout§ | **1.25 min** | N/A | N/A | 3.76 min |
-| case_5_on_trace | 2.54 min | N/A | 74.71 min | 7.42 min | 17.81 min | 2.17 min | **0.75 min (45.0s)** |
-| case_6_template | 14.36 min | 1.92 min | 6.44 min | 5.34 min | 16.83 min | 4.26 min | **0.25 min (15.2s)** |
+| case_1_lbtc_event_only | 11.02 min | 6.94 min | 34.80 min | 40.94 min | 188.79 min | 14.90 min | **1.02 min** |
+| case_2_lbtc_full | 7.78 min | 8.54 min | 64.86 min | 46.85 min | 66.41 min | 29.23 min | **1.14 min** |
+| case_3_ethereum_block | 2.51 min | N/A | 9.63 min | 0.25 min †† | 50.58 min | 2.67 min | **0.57 min (34.3s)** |
+| case_4_on_transaction | 22.12 min | N/A | Timeout§ | **1.25 min** | N/A | N/A | 4.67 min |
+| case_5_on_trace | 2.54 min | N/A | 74.71 min | 7.42 min | 17.81 min | 2.17 min | **0.98 min (58.6s)** |
+| case_6_template | 14.36 min | 1.92 min | 6.44 min | 5.34 min | 16.83 min | 4.26 min | **0.42 min (25.1s)** |
 
 > **Notes**:
 > - § Ponder timed out after 2 hours with only 2.5% progress

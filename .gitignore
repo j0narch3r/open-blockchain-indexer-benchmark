@@ -98,3 +98,6 @@ changes.patch
 .vscode/
 
 *.log
+
+# Local-only runner variants (e.g. image-tag-capable copy, not for PR)
+*.local.ts
