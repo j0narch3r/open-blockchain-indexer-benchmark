@@ -21,6 +21,9 @@ This benchmark tests the performance of various indexers when processing transac
 | Ponder   | 33m            | 1,696,423 | 22,280,000-22,289,999 |
 | Subgraph | N/A            | N/A       | N/A                   | 
 | Sentio (3.0.0-rc.9) | 35.6m            | 1,696,641 | 22,280,000-22,290,000 |
+| Goldsky | 4.67m | 1,696,641 | 22,280,000-22,290,000 |
+
+^ Goldsky data generated July 2026.
 
 ## Data Distribution Details
 
@@ -28,6 +31,7 @@ The distribution of transactions across platforms is remarkably consistent, with
 
 - **Sentio**: 1,696,641 transaction records
 - **Subsquid**: 1,696,641 transaction records
+- **Goldsky**: 1,696,641 transaction records
 - **Envio**: 1,696,423 transaction records
   - Unique senders: 493,181
   - Unique recipients: 315,861
@@ -39,12 +43,12 @@ The distribution of transactions across platforms is remarkably consistent, with
 
 ## Key Findings
 
-1. **Complete Data Coverage**: Sentio, Subsquid, Envio, and Ponder all demonstrated high coverage of the transaction data in the target block range, with some variations in the total record count due to differences in how platforms handle block boundaries:
+1. **Complete Data Coverage**: Sentio, Subsquid, Envio, Goldsky, and Ponder all demonstrated high coverage of the transaction data in the target block range, with some variations in the total record count due to differences in how platforms handle block boundaries:
    - **End Block Handling**: Analysis reveals that Envio/Ponder process blocks up to but not including the end block (exclusive handling), stopping at block 22,289,999 in practice, while Sentio/Subsquid include the end block (inclusive handling), going all the way to block 22,290,000. This accounts for the 218 additional records in Sentio's dataset.
 
 2. **Performance Differences**:
    - **Envio with HyperSync** demonstrated exceptional performance at 1 minute 26 seconds, processing transactions at a rate of approximately 20,000 transactions per second.
-   - **Subsquid** showed excellent performance at 5 minutes, making it the fastest among the traditional indexers.
+   - **Goldsky** showed excellent performance at 4.67 minutes, making it the fastest among the traditional indexers, followed by Subsquid at 5 minutes.
    - **Sentio** completed in 23 minutes with reliable performance.
    - **Ponder** processed all transactions in 33 minutes.
 
@@ -57,6 +61,7 @@ The distribution of transactions across platforms is remarkably consistent, with
 Each subdirectory contains the implementation for a specific indexing platform:
 - `/sentio`: Sentio implementation 
 - `/envio`: Envio implementation with HyperSync
+- `/goldsky`: Goldsky implementation
 - `/ponder`: Ponder implementation
 - `/sqd`: Subsquid implementation
 
