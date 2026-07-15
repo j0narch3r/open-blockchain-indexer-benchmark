@@ -28,12 +28,12 @@ The benchmark requires each indexer to:
 | Indexer  | Time to Complete | Records Indexed | Notes |
 |----------|------------------|----------------|-------|
 | Sentio   | 8m               | 296,734        | |
-| Envio HyperIndex | 2m        | 296,734        | Fastest processing time |
+| Envio HyperIndex | 2m        | 296,734        | |
 | Ponder   | 1h40m            | 296,138        | Missing ~5% of events |
 | Subsquid | 10m              | 296,734        | |
 | Subgraph | 3h9m             | 296,734        | |
 | Sentio(v3.0.0-rc9) | 13.06m | 296,278 | [Project link](https://app.sentio.xyz/sentio/case_1_lbtc_event_only/) |
-| Goldsky | 1.02m | 294,278 | |
+| Goldsky | 1.02m | 294,278 | Fastest processing time |
 
 ^ Goldsky data generated July 2026.
 
