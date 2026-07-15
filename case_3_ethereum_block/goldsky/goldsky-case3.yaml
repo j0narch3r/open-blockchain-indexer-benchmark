@@ -1,0 +1,41 @@
+# Goldsky Turbo — Case 3: Ethereum block metadata extraction
+#
+# Indexes block metadata (number, hash, parent_hash, timestamp) for blocks
+# [0, 100,000] from the ethereum.raw_blocks dataset. One block = one row via a
+# plain SQL projection (no decoding, no arithmetic). job: true → self-terminates.
+
+name: goldsky-case3
+resource_size: m
+job: true
+
+sources:
+  blocks:
+    type: dataset
+    dataset_name: ethereum.raw_blocks
+    version: 1.0.0
+    start_at: earliest
+    primary_key: id
+    filter: >-
+      number >= 0 AND number <= 100000
+
+transforms:
+  blocks_out:
+    type: sql
+    primary_key: id
+    sql: >-
+      SELECT
+        id,
+        number,
+        hash,
+        parent_hash,
+        `timestamp` AS block_timestamp
+      FROM blocks
+
+sinks:
+  pg:
+    type: postgres
+    from: blocks_out
+    schema: public
+    table: goldsky_case3
+    secret_name: MY_POSTGRES_SECRET
+    primary_key: id

@@ -21,6 +21,9 @@ This benchmark tests the performance of various indexers when processing Uniswap
 | Subgraph   | 8m             | 29,058  | 22,200,000-22,290,000 |
 | Ponder     | N/A            | 0       | 22,200,000-22,290,000 |
 | Sentio v3.0.0-rc.9 | 12.9m            | 50,191  | 22,200,000-22,290,000 |
+| Goldsky | 0.98m (58.6s) | 50,191 | 22,200,000-22,290,000 |
+
+^ Goldsky data generated July 2026.
 
 ## Data Distribution Details
 
@@ -56,11 +59,12 @@ The distribution of swap transactions across platforms shows significant variati
    - **No Coverage**: Ponder implementation encountered issues with trace capture
 
 2. **Performance Differences**:
-   - **Envio with HyperSync** demonstrated exceptional performance at 41 seconds
+   - **Goldsky** demonstrated exceptional indexing speed (3.2 seconds) with overall cloud performance competitive with Envio HyperSync (58.6 seconds vs 41 seconds).
    - **Subsquid** showed excellent performance at 2 minutes
    - **Sentio** completed in 16 minutes with reliable performance
    - **Subgraph** processed in 8 minutes but with incomplete data
    - **Ponder** failed to capture any trace data
+
 
 3. **Implementation Approaches**:
    - Envio's implementation leverages their HyperSync technology for optimized trace data access
@@ -72,6 +76,7 @@ The distribution of swap transactions across platforms shows significant variati
 Each subdirectory contains the implementation for a specific indexing platform:
 - `/sentio`: Sentio implementation 
 - `/envio`: Envio implementation with HyperSync
+- `/goldsky`: Goldsky implementation
 - `/ponder`: Ponder implementation
 - `/sqd`: Subsquid implementation
 - `/subgraph`: Subgraph implementation

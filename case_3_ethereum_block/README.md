@@ -21,8 +21,11 @@ This benchmark tests the performance of various indexers when processing Ethereu
 | Ponder   | 33m            | 100001  | 0-100000    | Complete |
 | Subgraph | 10m            | 100001  | 0-100000    | Complete |
 | Sentio v3.0.0-rc.9 | 1m            | 100001  | 0-100000    | Complete |
+| Goldsky | 0.57m (34.3s) | 100001 | 0-100000 | Complete |
 
 \* *Subsquid used an archival node but has missing data, primarily indexing blocks in the 45000-100000 range*
+
+^ Goldsky data generated July 2026.
 
 ## Block Distribution Details
 
@@ -41,6 +44,7 @@ This benchmark tests the performance of various indexers when processing Ethereu
 - **Envio HyperSync**: Complete coverage of blocks 0-100000 (100001 blocks total)
 - **Ponder**: Complete coverage of blocks 0-100000 (100001 blocks total)
 - **Subgraph**: Complete coverage of blocks 0-100000 (100001 blocks total)
+- **Goldsky**: Complete coverage of blocks 0-100000 (100001 blocks total)
 
 ## Similarity Analysis
 
@@ -74,14 +78,16 @@ We compared all platforms pairwise, focusing on three key fields:
    - **Sparse Coverage**: Subsquid has significantly lower coverage with only 13,156 blocks, primarily in the 40,000-100,000 range.
 
 3. **Performance Differences**:
-   - **Envio** demonstrated the fastest processing with HyperSync (7.9 seconds), but does not support traditional block handlers
+   - **Goldsky** demonstrated the fastest raw processing (6.8 seconds), beating Envio Hypersync (7.9 seconds) which does not support traditional block handlers
    - **Sentio**, **Ponder**, and **Subgraph** all completed indexing in reasonable timeframes (18-33 minutes)
    - **Subsquid** completed quickly (1 minute) but with significant data gaps
+   - **Goldsky** indexed all blocks in 0.57 min — the fastest complete indexer run
 
 ## Implementation Details
 
 Each subdirectory contains the implementation for a specific indexing platform:
 - `/sentio`: Sentio implementation
+- `/goldsky`: Goldsky implementation
 - `/ponder`: Ponder implementation
 - `/sqd`: Subsquid implementation
 - `/subgraph`: The Graph subgraph implementation
