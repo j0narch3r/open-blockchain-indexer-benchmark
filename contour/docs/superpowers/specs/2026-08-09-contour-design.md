@@ -91,12 +91,15 @@ This is what makes Stage B independently testable without a routing engine in th
 ```python
 LonLat = tuple[float, float]          # (lon, lat) — GeoJSON order, always
 
+**Collection fields are `tuple`, never `list`.** `@dataclass(frozen=True)` blocks attribute *rebinding* only — a `list` field remains mutable in place, so a downstream module could reorder a candidate's geometry after another module had already scored it, and nothing would raise. These objects cross module boundaries between Stage A, Stage B, and the API layer; the immutability has to be real. Where a field must map keys, use `Mapping`, not `dict`.
+
+```python
 @dataclass(frozen=True)
 class RouteCandidate:                 # Stage A output
-    geometry: list[LonLat]
+    geometry: tuple[LonLat, ...]
     engine_distance_m: float
     engine_duration_s: float
-    way_tags: list[dict[str, str]]    # parallel to geometry edges, len == len(geometry) - 1
+    way_tags: tuple[Mapping[str, str], ...]  # parallel to edges, len == len(geometry) - 1
     source: str                       # "fixture" | "graphhopper" | "valhalla"
     slope_weight: float               # which Stage A weight produced this
 
@@ -107,7 +110,7 @@ class ProfilePoint:
 
 @dataclass(frozen=True)
 class ElevationProfile:
-    points: list[ProfilePoint]
+    points: tuple[ProfilePoint, ...]
     ascent_m: float
     descent_m: float
     max_grade_pct: float
@@ -131,8 +134,8 @@ class SteepSection:
 class ScoredRoute:                    # Stage B output
     candidate: RouteCandidate
     profile: ElevationProfile
-    grade_segments: list[GradeSegment]
-    steep_sections: list[SteepSection]
+    grade_segments: tuple[GradeSegment, ...]
+    steep_sections: tuple[SteepSection, ...]
     distance_m: float                 # recomputed geodesic, not the engine's
     flat_equivalent_m: float
     effort_score: float
