@@ -101,3 +101,4 @@ changes.patch
 
 # Local-only runner variants (e.g. image-tag-capable copy, not for PR)
 *.local.ts
+.superpowers/
