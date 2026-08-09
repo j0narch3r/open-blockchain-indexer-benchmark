@@ -1,0 +1,22 @@
+# Data: gitignored except the manifest and committed fixtures.
+data/**
+!data/manifest.json
+!data/fixtures/**
+
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# Node / Expo
+node_modules/
+
+# Planning docs (not part of the shipped project)
+.superpowers/

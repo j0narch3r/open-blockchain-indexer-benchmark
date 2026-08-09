@@ -1,0 +1,27 @@
+# Contour local/deploy stack. See docs/SPEC.md §5 for the architecture.
+#
+# Not run in the M1 scaffold task — the api Dockerfile and the
+# routing-engine build (GraphHopper/Valhalla) land in later tasks.
+# This file documents the intended topology so later tasks extend it
+# rather than inventing a new one.
+
+services:
+  api:
+    build:
+      context: ./services/api
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/data:ro
+    depends_on:
+      - routing-engine
+
+  routing-engine:
+    build:
+      context: ./services/routing-engine
+    ports:
+      - "8989:8989"
+    volumes:
+      - ./data:/data:ro
