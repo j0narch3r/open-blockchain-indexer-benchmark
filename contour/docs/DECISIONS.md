@@ -147,3 +147,62 @@ the agreement test does the same conversion before comparing to `constants.py`).
 (rejected — not in the Step 3 list of exact values to add, and the grade color ramp is
 client-side per design doc §6 (`theme/grade.ts`); out of this task's scope per Global
 Constraints' "do not expand scope").
+
+---
+
+## Task 2, fix round 1: real immutability + structural model validation
+
+**Decided:** Every collection-typed field in `types.py`'s dataclasses is now `tuple[X, ...]`
+(never `list`) or `tuple[Mapping[str, str], ...]` (never `list[dict[str, str]]`), matching
+design doc §4.2 as corrected in commit `d7ba35b`: `RouteCandidate.geometry`,
+`RouteCandidate.way_tags`, `ElevationProfile.points`, `ScoredRoute.grade_segments`,
+`ScoredRoute.steep_sections`. `SegmentStat` has no collection fields and needed no change;
+`EffortModel.k_table`/`k_scale`/`detour_budget` were already `tuple`/`Mapping` from Task 2 and
+needed no change either.
+**Why:** `@dataclass(frozen=True)` blocks attribute *rebinding* only — a `list` field stays
+mutable in place, so a downstream module could reorder or append to a candidate's geometry after
+another module had already scored it, and nothing would raise. These objects cross the Stage
+A / Stage B / API module boundaries the design doc §4.1 dependency diagram describes, so the
+immutability has to be real, not just documented intent. Caught by Task 2's own review; the
+design doc itself was wrong (it specified `list[...]`) and has been fixed upstream rather than
+worked around here.
+**Verified:** added `tuple.append(...)` (expect `AttributeError`) and `tuple[0] = ...` (expect
+`TypeError`) assertions for every affected field
+(`test_route_candidate_collections_reject_in_place_mutation`, and inline in
+`test_elevation_profile_is_frozen_and_has_exact_fields` /
+`test_scored_route_is_frozen_and_composes_the_others`). Python does not enforce dataclass field
+type annotations at runtime, so these tests exercise the actual tuple values the codebase is
+expected to construct (per §4.2's corrected type hints), not the annotation itself — that is the
+limit of what a frozen dataclass with no `__post_init__` isinstance check can guarantee, and
+adding such a check was judged unnecessary scope beyond what the finding asked for.
+
+**Decided:** `load_effort_model()` now calls a new `validate_effort_model(model: EffortModel) ->
+None` before returning, which raises `ValueError` (naming the offending field) if: `model_version`
+is empty; `climb_equiv_ratio <= 0`; `k_table` is empty or not sorted strictly ascending by grade;
+`k_scale` or `detour_budget` do not have exactly the keys `{1,2,3,4,5}`; or any `detour_budget`
+value is `< 1.0`. `validate_effort_model` is exported from `types.py` so it can be driven directly
+against malformed in-memory `EffortModel` instances in tests, independent of the filesystem.
+**Why:** The task-2 brief's Step 6 asked for "a loader that validates it against the constants";
+Task 2's original reasoning — that baking v1-value-equality into the loader would break by design
+once a genuinely different `effort-v2.json` ships — was judged correct and is preserved. The fix
+resolves the tension by validating *structural* invariants that must hold for any model version
+(shape, sign, monotonicity, key completeness) in the loader itself, while leaving *value*-equality
+against `constants.py` to the version-pinned test added in the original Task 2 commit. A budget
+`< 1.0` is specifically guarded because the ranker's budget filter (design doc §4.6 step 3) drops
+candidates whose distance exceeds `budget × fastest.distance_m` — a sub-1.0 budget would reject the
+fastest route against itself, which no valid model should ever specify.
+**Verified:** one test per invariant (`test_validate_effort_model_rejects_*`), each constructing a
+`_valid_model()` baseline via `dataclasses.replace` and violating exactly one field, asserting
+`pytest.raises(ValueError, match=<field name>)`; plus
+`test_validate_effort_model_accepts_a_valid_model` proving the valid case does not raise. All nine
+tests pass; `load_effort_model()` on the committed `effort-v1.json` continues to pass validation
+(`test_load_effort_model_default_version` still green), confirming the new check doesn't reject
+the real model.
+
+**Alternatives rejected:** Adding a `__post_init__` `isinstance` check to every frozen dataclass to
+reject `list` arguments at construction time (rejected — not what either finding asked for, and
+would add runtime overhead + boilerplate to every dataclass in the module for a guarantee the type
+system already communicates via the corrected §4.2 annotations; flagged here in case a future task
+wants stricter enforcement). Checking model-version equality to `constants.py` inside
+`validate_effort_model` (rejected — explicitly the thing fix round 1 says not to undo; would make
+`effort-v2.json` unloadable by construction).

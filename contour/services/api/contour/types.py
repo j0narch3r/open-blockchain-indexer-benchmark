@@ -1,10 +1,16 @@
 """Core types shared across Contour's modules (design doc §4.2) plus the
 versioned effort model.
 
-Every dataclass here is frozen: instances flow one-way from Stage A
-(candidate generation) through Stage B (re-ranking) to the API response,
-and nothing downstream should be able to mutate a value another module
-already scored against.
+Every dataclass here is frozen, and every collection-typed field is a
+`tuple` (never `list`) or a `Mapping` (never `dict`): instances flow
+one-way from Stage A (candidate generation) through Stage B (re-ranking)
+to the API response, and `@dataclass(frozen=True)` alone only blocks
+attribute *rebinding* — a `list` field would stay mutable in place, so a
+downstream module could reorder a candidate's geometry after another
+module had already scored it, and nothing would raise. Using `tuple`
+makes that a real `AttributeError`/`TypeError` at the call site, not just
+a documented intention. See design doc §4.2 (fixed in commit `d7ba35b`
+after the Task 2 review caught the original `list[...]` spec).
 """
 
 import json
@@ -26,10 +32,10 @@ LonLat = tuple[float, float]  # (lon, lat) — GeoJSON order, always
 class RouteCandidate:
     """Stage A output — one alternative route as returned by a routing engine."""
 
-    geometry: list[LonLat]
+    geometry: tuple[LonLat, ...]
     engine_distance_m: float
     engine_duration_s: float
-    way_tags: list[dict[str, str]]  # parallel to geometry edges, len == len(geometry) - 1
+    way_tags: tuple[Mapping[str, str], ...]  # parallel to edges, len == len(geometry) - 1
     source: str  # "fixture" | "graphhopper" | "valhalla"
     slope_weight: float  # which Stage A weight produced this
 
@@ -42,7 +48,7 @@ class ProfilePoint:
 
 @dataclass(frozen=True)
 class ElevationProfile:
-    points: list[ProfilePoint]
+    points: tuple[ProfilePoint, ...]
     ascent_m: float
     descent_m: float
     max_grade_pct: float
@@ -74,8 +80,8 @@ class ScoredRoute:
 
     candidate: RouteCandidate
     profile: ElevationProfile
-    grade_segments: list[GradeSegment]
-    steep_sections: list[SteepSection]
+    grade_segments: tuple[GradeSegment, ...]
+    steep_sections: tuple[SteepSection, ...]
     distance_m: float  # recomputed geodesic, not the engine's
     flat_equivalent_m: float
     effort_score: float
@@ -119,12 +125,74 @@ class EffortModel:
 
 _MODELS_DIR = Path(__file__).parent / "models"
 
+# The five slider detents (SPEC.md §3.4) — every model version, whatever its
+# k-table/climb_equiv_ratio values, must key its per-detent maps by exactly
+# these integers.
+_REQUIRED_DETENTS = frozenset({1, 2, 3, 4, 5})
+
+
+def validate_effort_model(model: EffortModel) -> None:
+    """Check invariants that must hold for *any* effort model version.
+
+    This deliberately does not check value-equality against `constants.py`
+    — that agreement is a property of the "effort-v1" model specifically
+    (checked by a test), not a structural requirement every future model
+    version must satisfy. What must always hold, regardless of version:
+
+    - `model_version` is a non-empty string
+    - `climb_equiv_ratio` is positive
+    - `k_table` is non-empty and sorted strictly ascending by grade
+    - `k_scale` and `detour_budget` each have exactly the keys {1..5}
+    - every `detour_budget` value is >= 1.0 (a budget below 1.0 would
+      reject the fastest route against itself in the ranker's budget
+      filter, design doc §4.6 step 3)
+
+    Raises `ValueError` naming the offending field on the first violation
+    found.
+    """
+    if not model.model_version:
+        raise ValueError("EffortModel.model_version must be a non-empty string")
+
+    if model.climb_equiv_ratio <= 0:
+        raise ValueError(
+            f"EffortModel.climb_equiv_ratio must be > 0, got {model.climb_equiv_ratio!r}"
+        )
+
+    if not model.k_table:
+        raise ValueError("EffortModel.k_table must be non-empty")
+    grades = [grade for grade, _k in model.k_table]
+    if any(grades[i] <= grades[i - 1] for i in range(1, len(grades))):
+        raise ValueError(
+            f"EffortModel.k_table must be sorted strictly ascending by grade, got {grades!r}"
+        )
+
+    k_scale_keys = set(model.k_scale.keys())
+    if k_scale_keys != _REQUIRED_DETENTS:
+        raise ValueError(
+            f"EffortModel.k_scale must have exactly keys {sorted(_REQUIRED_DETENTS)}, "
+            f"got {sorted(k_scale_keys)!r}"
+        )
+
+    detour_budget_keys = set(model.detour_budget.keys())
+    if detour_budget_keys != _REQUIRED_DETENTS:
+        raise ValueError(
+            f"EffortModel.detour_budget must have exactly keys {sorted(_REQUIRED_DETENTS)}, "
+            f"got {sorted(detour_budget_keys)!r}"
+        )
+
+    for detent, budget in model.detour_budget.items():
+        if budget < 1.0:
+            raise ValueError(f"EffortModel.detour_budget[{detent}] must be >= 1.0, got {budget!r}")
+
 
 def load_effort_model(version: str = "effort-v1") -> EffortModel:
-    """Load and parse a versioned effort model from `contour/models/`.
+    """Load, parse, and structurally validate a versioned effort model from
+    `contour/models/`.
 
-    Raises `FileNotFoundError` if no JSON file exists for `version`. Does
-    not validate the loaded values against `constants.py` — that agreement
+    Raises `FileNotFoundError` if no JSON file exists for `version`, or
+    `ValueError` if the loaded model fails `validate_effort_model`'s
+    invariants (see that function for exactly what is checked). Does not
+    validate the loaded *values* against `constants.py` — that agreement
     is checked by a test for the "effort-v1" model specifically, since
     later model versions are expected to diverge from the v1 defaults.
     """
@@ -140,13 +208,15 @@ def load_effort_model(version: str = "effort-v1") -> EffortModel:
         {int(detent): float(v) for detent, v in raw["detour_budget"].items()}
     )
 
-    return EffortModel(
+    model = EffortModel(
         model_version=str(raw["model_version"]),
         climb_equiv_ratio=float(raw["climb_equiv_ratio"]),
         k_table=k_table,
         k_scale=k_scale,
         detour_budget=detour_budget,
     )
+    validate_effort_model(model)
+    return model
 
 
 __all__ = [
@@ -160,4 +230,5 @@ __all__ = [
     "SegmentStat",
     "EffortModel",
     "load_effort_model",
+    "validate_effort_model",
 ]
