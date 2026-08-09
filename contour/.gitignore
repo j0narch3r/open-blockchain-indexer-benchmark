@@ -1,6 +1,7 @@
 # Data: gitignored except the manifest and committed fixtures.
 data/**
 !data/manifest.json
+!data/fixtures/
 !data/fixtures/**
 
 # Secrets
