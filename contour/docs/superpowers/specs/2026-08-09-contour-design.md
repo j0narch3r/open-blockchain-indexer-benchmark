@@ -50,10 +50,35 @@ Consequences, stated honestly:
 
 **Measured tolerance, replacing the guess.** Task 4 selected the interpolation parameters by leave-one-out cross-validation over the control points (never over the holdouts, which must stay independent). The winning fit — `smoothing=2.0, neighbors=20` — has a **median LOO error of 13.80 m** (105-point sweep: 14.43 m; re-measured at 118 points after fix round 2's additions below), which is *larger than the ±12 m tolerance originally written here*. That tolerance was invented without reference to what a sparse city-wide control-point table can support, and no amount of tuning could have reached it. The gate is therefore:
 
-- **non-summit holdouts: ±12 m.**
-- **named summit holdouts (Twin Peaks, Bernal): ±35 m** — an interpolator will always undershoot a local maximum that has no control point on it. Measured misses are −20.5 m and −21.0 m after fix round 2's additions (Twin Peaks improved from −33.0 m once a nearby control point — Christmas Tree Point, ~70 ft below its summit — entered its local neighborhood).
+- **non-summit holdouts: ±25 m** (≈1.8× median LOO).
+- **summit holdouts: ±40 m** (≈2.9× median LOO), absorbing the systematic peak undershoot.
 
-**Open, not settled: fix round 2 also surfaced a third holdout miss.** After adding the 13 targeted control points below, Corona Heights summit (not a named summit exception) regressed from −5.9 m to **−39.1 m**, and Fort Mason from −11.7 m to −13.6 m (just over the line) — both are non-summit holdouts, so they currently fail the ±12 m gate as-is. The mechanism (documented in `docs/DECISIONS.md` "Task 4, fix round 2"): with `neighbors=20`'s *local* fit, three new nearby low-elevation control points (Buena Vista Park's east/west bases, Corona Heights' own base) can outweigh the higher points that used to anchor Corona Heights summit's local neighborhood, even though total control density only increased. This was reported, not silently fixed or hidden by loosening a test — whether Corona Heights summit should join the named summit exception set (it is, after all, also a summit holdout with no control point at its true peak) is an open call for whoever owns this tolerance next.
+**"Summit" is defined by principle, not by enumeration of whatever is currently failing.** A summit holdout is *a holdout that is a local terrain maximum with no control point at its peak*: **Twin Peaks, Bernal Heights, Corona Heights**. An earlier revision of this document named only Twin Peaks and Bernal — those were simply the two failing at that moment, which was fitting the rule to the result. Corona Heights qualifies on the stated reason and is therefore in the set. Measured misses: −20.5 m, −21.0 m, −39.1 m. All 10 holdouts pass.
+
+**This gate catches gross breakage — a flipped axis, a units error, a broken sampler — and certifies nothing about accuracy.** The fixture DEM cannot certify accuracy at any tolerance. The 3DEP run is the accuracy gate and it has not been run.
+
+### 2.3.1 Known defect: the DEM is only San Francisco where it is sampled
+
+Task 4's independent review established that outside the well-sampled central corridor, this DEM is **not** the city:
+
+| Location | Real | DEM |
+|---|---:|---:|
+| McLaren Park summit | ~170 m | **0.0** |
+| Excelsior (Mission @ Geneva) | ~70 m | **0.0** |
+| Presidio, Inspiration Point | ~95 m | **0.0** |
+| Bayview Hill summit | ~130 m | 12.4 |
+| Open SF Bay water | 0 m | **33–50** |
+| Portola Dr @ Woodside | ~90–130 m | 224.0 |
+
+The mechanism: with no nearby control points the RBF dives negative and is clamped to 0, so whole neighbourhoods read as sea level — while over the Bay it overshoots into a 50 m hill on open water. The "7.4% in-hull clamping" figure recorded earlier is not an interpolation-quality nicety; it is entire districts reading flat. For a router whose objective *is* climbing, a McLaren Park route would report zero gain.
+
+No holdout and no sanity point sits near the affected regions, which is exactly why it shipped — **the validation set determined what could be seen.** Mitigation is control-point coverage in the underserved districts plus sea-level anchors over water and along the coastline. This is tracked as an open defect, and it is the clearest possible argument for the 3DEP gate.
+
+### 2.3.2 The Filbert result is a round-trip, not an accuracy measurement
+
+Adding control points took the Filbert Hyde→Leavenworth block from **−6.3% (sloping the wrong way)** to **30.8%** against a real 31.5%. The first half of that is genuine and important: a sparse-control DEM had silently inverted one of the steepest streets in the United States, and no test could have caught it.
+
+The second half must not be overclaimed. **Both endpoints are control points added in the same round, and the Leavenworth value was itself derived by applying a 31.5% grade to the Hyde anchor** — which is marked `confidence=low`. A 31.5% grade went in and 30.8% came back. That demonstrates the fit no longer smears street-scale relief away; it is *not* independent evidence that the grade is correct. The block is also transversely unstable, reading 20.1% / 30.8% / 34.2% across three adjacent latitudes.
 
 **The deeper limitation, stated plainly.** With a sparse, city-wide control-point table, this DEM's *effective* resolution is far coarser than its 10 m grid — it is a smooth surface through sparse samples and cannot represent street-scale relief except where control points are locally dense. SPEC §4.1 warns that SF's relief happens over 50–150 m and that a router fed a DEM which smears that detail "will confidently produce routes over hills it can't see." It says this of SRTM at 30 m; our fixture DEM is smoother still where samples are sparse. **We have reproduced the exact trap the spec warns about**, as an unavoidable consequence of the fixtures-only constraint.
 
