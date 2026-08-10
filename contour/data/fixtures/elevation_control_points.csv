@@ -3,7 +3,7 @@ Twin Peaks summit (Eureka Peak),37.755930,-122.447600,281.0,holdout,Wikipedia,hi
 Ferry Building,37.795600,-122.393700,2.0,holdout,SF Port / news reporting,medium
 Ocean Beach (at Judah),37.760900,-122.510500,4.0,holdout,estimated from surrounding terrain,medium
 Alamo Square,37.776300,-122.434970,75.9,holdout,USGS GNIS,high
-Corona Heights summit,37.765900,-122.440600,158.5,holdout,Wikipedia,high
+Corona Heights summit,37.764650,-122.439140,158.5,holdout,Wikipedia (520 ft summit); coordinate corrected in fix round 6 - the original was 190 m northwest of the actual summit and sat instead at Buena Vista Park's south corner where true ground is ~105-110 m; see docs/DECISIONS.md fix rounds 5 and 6,high
 Bernal Heights summit,37.738700,-122.415700,135.6,holdout,Wikipedia (sources vary 433-475 ft),medium
 Lands End,37.780900,-122.504000,50.0,holdout,estimated from surrounding terrain,medium
 Mission Dolores Park,37.759600,-122.426900,18.9,holdout,topozone/USGS,high
@@ -16,7 +16,6 @@ Burnett Ave near Twin Peaks,37.749500,-122.443000,210.0,control,estimated from s
 Mount Davidson summit,37.738500,-122.453000,282.9,control,Wikipedia,high
 Mount Sutro summit,37.757500,-122.453100,276.8,control,Wikipedia (sources vary 908-912 ft),medium
 Buena Vista Park summit,37.768300,-122.440800,175.3,control,Wikipedia (575 ft peak); coordinate corrected in fix round 5 to Wikipedia's own park coordinate - the previous position was 94 m northeast of it and put a 175 m peak 70 m from Waller St and 24 m from the fixture graph's Buena Vista Ave East ring road,medium
-Museum Way and Roosevelt Way,37.764800,-122.439000,130.0,control,estimated from surrounding terrain,low
 States St and Corbett Ave,37.762500,-122.443700,110.0,control,estimated from surrounding terrain,low
 Roosevelt Way and 14th St,37.763800,-122.438600,120.0,control,estimated from surrounding terrain,low
 Bernal Heights Blvd north side,37.739500,-122.414500,120.0,control,estimated from surrounding terrain,low
@@ -267,3 +266,10 @@ Oak St at Masonic Ave,37.772130,-122.445566,46.0,control,estimated from surround
 Fell St at Masonic Ave,37.773156,-122.445748,44.0,control,estimated from surrounding terrain; coordinates are the fixture graph's own intersection node,low
 Oak St at Stanyan St,37.771240,-122.453555,55.0,control,estimated from surrounding terrain: the Panhandle's west end at Golden Gate Park; coordinates are the fixture graph's own intersection node,low
 Fell St at Stanyan St,37.772266,-122.453737,52.0,control,estimated from surrounding terrain; coordinates are the fixture graph's own intersection node,low
+Buena Vista Ave south corner (ring road junction),37.766200,-122.440300,105.0,control,estimated from surrounding terrain: fix round 6 - coordinate is the fixture graph's own Buena Vista Ave East/West ring-road junction node; the park's southern half had no control point anywhere on it until this round; this exact point was rejected by the 50 m holdout-separation guard in fix round 5 (42.5 m from the mislocated Corona Heights summit holdout) and is added now that fix round 6 corrected that holdout's coordinate away from here,low
+Buena Vista Park interior south slope,37.767250,-122.440550,140.0,control,estimated from surrounding terrain: fix round 6 - linear interpolation between the sourced summit (175.3 m) and the south corner ground truth (105 m) along the park's south slope; no other control point covers the park's interior south of the summit,low
+Buena Vista Ave East south arm,37.766600,-122.439400,110.0,control,estimated from surrounding terrain: fix round 6; coordinates are the fixture graph's own Buena Vista Avenue East intersection node on the park's southeast perimeter,low
+Buena Vista Ave West south arm,37.766700,-122.442200,82.0,control,estimated from surrounding terrain: fix round 6 - corrected from an initial 112.0 m estimate that ignored this point's actual position (41% of the way from the sourced west base at 65.0 m to the south corner at 105.0 m, not the midpoint) and briefly pushed the West ring road to 47.0% grade against its own neighboring anchor; linear interpolation gives ~81-82 m; coordinates are the fixture graph's own Buena Vista Avenue West intersection node on the park's southwest perimeter,low
+Market St midpoint Clayton to Twin Peaks climb (fixture graph node),37.756200,-122.442700,136.0,control,estimated from surrounding terrain: fix round 6 - linear interpolation between the sourced Market St at Clayton St node (112.0 m) and the sourced Upper Market St below Twin Peaks node (172.0 m) 780 m apart with no intermediate anchor; coordinates are the fixture graph's own node where the RBF previously bulged to 211.9 m,low
+Waller St midpoint between Central Ave and Baker St (fixture graph node),37.769453,-122.441832,60.0,control,estimated from surrounding terrain: fix round 6 - the flat street grid at Buena Vista Park's north base, same standard as its neighboring anchored nodes (Central Ave 62.0 m, Baker St 58.0 m); coordinates are the fixture graph's own node, previously unanchored and reading 85.3 m,low
+
