@@ -43,6 +43,7 @@ import rasterio
 from numpy.typing import NDArray
 from rasterio.transform import Affine, from_origin
 from scipy.interpolate import RBFInterpolator
+from scipy.spatial import Delaunay
 
 # `contour.constants` is the single source of truth for SF_BBOX (Global
 # Constraints). This script lives in `scripts/`, a sibling of `services/`,
@@ -85,7 +86,41 @@ CSV_ELEVATION_MAX_M: float = 290.0
 EXPECTED_HOLDOUT_COUNT: int = 10
 
 KERNEL: str = "thin_plate_spline"
-SMOOTHING: float = 0.5
+
+# `smoothing` and `neighbors` are selected by `select_best(run_loo_sweep(...))`
+# below (leave-one-out cross-validation over the 105 control points), NOT
+# by looking at holdout error — see `scripts/cv_sweep.py` and
+# docs/DECISIONS.md "Task 4, fix round 1" for the full sweep table and
+# reasoning. `test_interpolation_parameters_match_cv_sweep_winner` pins
+# these two literals to that function's actual output so they cannot
+# silently drift from the sweep that justifies them.
+#
+# The brief's original guess of `smoothing=0.5` undershot the two summit
+# holdouts (Twin Peaks -33.5 m, Bernal Heights -21.1 m). The sweep found
+# `smoothing` has essentially *no* measurable effect across the tested
+# values (0, 0.1, 0.5, 2.0) given this module's local-metres coordinate
+# scale — thin-plate-spline kernel magnitudes here run ~1e4-1e8, dwarfing
+# an additive smoothing term of 0-2 — the four smoothing values differ
+# only in the noise floor of the p90 metric (92.22 m vs 92.23 m, i.e.
+# nothing); `2.0` is the literal argmin `select_best` returns, not a
+# meaningfully "better" choice than 0/0.1/0.5. `neighbors=20` is the real
+# signal: lowest median (14.43 m vs 14.55 m global) AND lowest p90
+# (92.22 m vs 97.15 m global) among the swept values. It does NOT fix the
+# summit undershoot (Twin Peaks -33.3 m, Bernal Heights -20.9 m with this
+# config — virtually unchanged) and it slightly *increases* in-hull
+# clamping (7.67% vs 7.27% for the old global config). Kept anyway,
+# exactly as selected, because the whole point of this sweep is that
+# parameters come from this measurement, not from post-hoc adjustment
+# against the holdouts it exists to check independently.
+SMOOTHING: float = 2.0
+NEIGHBORS: int | None = 20
+
+# The candidate grid swept by `run_loo_sweep` (called from
+# `scripts/cv_sweep.py`). Kept here, not just in the sweep script, so the
+# constants above are provably drawn from this exact grid — see
+# `test_interpolation_parameters_match_cv_sweep_winner`.
+SMOOTHING_SWEEP: tuple[float, ...] = (0.0, 0.1, 0.5, 2.0)
+NEIGHBORS_SWEEP: tuple[int | None, ...] = (None, 10, 20, 40)
 
 MANIFEST_SOURCE: str = "fixture"
 
@@ -259,6 +294,13 @@ class ClampStats:
     clamped_low: int
     clamped_high: int
     total_pixels: int
+    # Pixels clamped that also fall inside the convex hull of the control
+    # points — i.e. nominally "should have real land data nearby," as
+    # opposed to the open Bay/ocean pixels outside the hull where there is
+    # no control data at all and clamping to sea level is expected. See
+    # docs/DECISIONS.md "Task 4, fix round 1".
+    in_hull_clamped: int
+    in_hull_pixels: int
 
     @property
     def clamped_total(self) -> int:
@@ -267,6 +309,10 @@ class ClampStats:
     @property
     def clamped_fraction(self) -> float:
         return self.clamped_total / self.total_pixels if self.total_pixels else 0.0
+
+    @property
+    def in_hull_clamped_fraction(self) -> float:
+        return self.in_hull_clamped / self.in_hull_pixels if self.in_hull_pixels else 0.0
 
 
 def interpolate_dem(
@@ -289,7 +335,7 @@ def interpolate_dem(
     eles = np.array([p.ele_m for p in control_points], dtype=np.float64)
 
     xy = _to_local_meters(lons, lats, bbox)
-    rbf = RBFInterpolator(xy, eles, kernel=KERNEL, smoothing=SMOOTHING)
+    rbf = RBFInterpolator(xy, eles, kernel=KERNEL, smoothing=SMOOTHING, neighbors=NEIGHBORS)
 
     grid = _grid_spec(bbox, resolution_m)
     west, south, east, north = bbox
@@ -313,10 +359,108 @@ def interpolate_dem(
     z_clamped = np.clip(z, ELEVATION_MIN_M, ELEVATION_MAX_M).astype(np.float32)
     array = z_clamped.reshape(grid.height, grid.width)
 
+    in_hull = _in_convex_hull(xy, grid_xy)
+    in_hull_clamped = int(np.sum(in_hull & ((z < ELEVATION_MIN_M) | (z > ELEVATION_MAX_M))))
+
     stats = ClampStats(
-        clamped_low=clamped_low, clamped_high=clamped_high, total_pixels=total_pixels
+        clamped_low=clamped_low,
+        clamped_high=clamped_high,
+        total_pixels=total_pixels,
+        in_hull_clamped=in_hull_clamped,
+        in_hull_pixels=int(np.sum(in_hull)),
     )
     return array, grid.transform, stats
+
+
+def _in_convex_hull(
+    control_xy: NDArray[np.float64], query_xy: NDArray[np.float64]
+) -> NDArray[np.bool_]:
+    """True for each `query_xy` point that falls inside the convex hull of
+    `control_xy` — used to separate "clamped because there's no nearby
+    control data at all" (open water, expected) from "clamped despite
+    being surrounded by control points" (a real interpolation-quality
+    signal). See docs/DECISIONS.md "Task 4, fix round 1"."""
+    hull = Delaunay(control_xy)
+    result: NDArray[np.bool_] = hull.find_simplex(query_xy) >= 0
+    return result
+
+
+# --- Leave-one-out cross-validation (parameter selection) -------------------
+#
+# `smoothing`/`neighbors` are NOT chosen by looking at holdout error — the
+# holdouts are the final independent check (design doc §2.3) and picking
+# parameters to minimise their error would make that check circular. This
+# section selects parameters against the 105 *control* points instead, each
+# held out one at a time and predicted from the rest. See
+# docs/DECISIONS.md "Task 4, fix round 1" and `scripts/cv_sweep.py`.
+
+
+def loo_errors(
+    control_points: Sequence[ControlPoint],
+    bbox: tuple[float, float, float, float],
+    smoothing: float,
+    neighbors: int | None,
+) -> NDArray[np.float64]:
+    """Leave-one-out absolute errors (metres) for one (smoothing, neighbors)
+    combination: for each control point, fit on the other 104 and predict
+    the held-out one. Returns one error per input point, same order."""
+    lons = np.array([p.lon for p in control_points], dtype=np.float64)
+    lats = np.array([p.lat for p in control_points], dtype=np.float64)
+    eles = np.array([p.ele_m for p in control_points], dtype=np.float64)
+    xy = _to_local_meters(lons, lats, bbox)
+
+    n = len(control_points)
+    errors = np.empty(n, dtype=np.float64)
+    mask = np.ones(n, dtype=bool)
+    for i in range(n):
+        mask[i] = False
+        nb = neighbors if neighbors is None else min(neighbors, n - 1)
+        rbf = RBFInterpolator(
+            xy[mask], eles[mask], kernel=KERNEL, smoothing=smoothing, neighbors=nb
+        )
+        predicted = rbf(xy[i : i + 1])[0]
+        errors[i] = abs(predicted - eles[i])
+        mask[i] = True
+    return errors
+
+
+@dataclass(frozen=True)
+class SweepResult:
+    smoothing: float
+    neighbors: int | None
+    median_loo_error_m: float
+    p90_loo_error_m: float
+
+
+def run_loo_sweep(
+    control_points: Sequence[ControlPoint],
+    bbox: tuple[float, float, float, float] = SF_BBOX,
+    smoothing_values: Sequence[float] = SMOOTHING_SWEEP,
+    neighbors_values: Sequence[int | None] = NEIGHBORS_SWEEP,
+) -> tuple[SweepResult, ...]:
+    """Run leave-one-out cross-validation for every (smoothing, neighbors)
+    combination in the sweep grid, scored by median and p90 (90th
+    percentile) absolute LOO error across the 105 control points."""
+    results = []
+    for smoothing in smoothing_values:
+        for neighbors in neighbors_values:
+            errors = loo_errors(control_points, bbox, smoothing, neighbors)
+            results.append(
+                SweepResult(
+                    smoothing=smoothing,
+                    neighbors=neighbors,
+                    median_loo_error_m=float(np.median(errors)),
+                    p90_loo_error_m=float(np.percentile(errors, 90)),
+                )
+            )
+    return tuple(results)
+
+
+def select_best(results: Sequence[SweepResult]) -> SweepResult:
+    """Pick the sweep winner: lowest median LOO error first, p90 as
+    tie-breaker. Both are ordinary Python floats compared exactly — no
+    hidden preference for one metric beyond "median first"."""
+    return min(results, key=lambda r: (r.median_loo_error_m, r.p90_loo_error_m))
 
 
 # --- Raster I/O -------------------------------------------------------------
@@ -444,6 +588,10 @@ def write_manifest(
         "control_point_count": result.control_point_count,
         "clamped_pixel_count": result.clamp_stats.clamped_total,
         "total_pixel_count": result.clamp_stats.total_pixels,
+        "in_hull_clamped_pixel_count": result.clamp_stats.in_hull_clamped,
+        "in_hull_pixel_count": result.clamp_stats.in_hull_pixels,
+        "interpolation_smoothing": SMOOTHING,
+        "interpolation_neighbors": NEIGHBORS,
     }
     # `manifest_sha256` hashes the manifest's own content (everything
     # above) so downstream consumers can detect if the manifest file was
@@ -496,6 +644,12 @@ def main() -> None:
         f"({result.clamp_stats.clamped_fraction:.4%} of {result.clamp_stats.total_pixels:,}) "
         f"[low={result.clamp_stats.clamped_low:,} high={result.clamp_stats.clamped_high:,}]"
     )
+    print(
+        f"  in-hull clamped pixels: {result.clamp_stats.in_hull_clamped:,} "
+        f"({result.clamp_stats.in_hull_clamped_fraction:.4%} of "
+        f"{result.clamp_stats.in_hull_pixels:,} pixels inside the control points' convex hull)"
+    )
+    print(f"  interpolation: smoothing={SMOOTHING}, neighbors={NEIGHBORS} (see cv_sweep.py)")
     print(f"Wrote {DEFAULT_MANIFEST_PATH}")
     print(f"  manifest_sha256: {manifest['manifest_sha256']}")
 

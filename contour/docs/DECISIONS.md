@@ -594,3 +594,132 @@ the Twin Peaks/Bernal Heights holdout error (rejected for this task — the brie
 task was asked to resolve; changing it unilaterally would be re-litigating a settled instruction,
 not resolving an underspecified one). Adding synthetic water-boundary control points to reduce
 extrapolation (rejected — the control-point table is explicitly not this task's to re-author).
+
+---
+
+## Task 4, fix round 1: select `smoothing`/`neighbors` by leave-one-out cross-validation
+
+Coordinator-directed correction: replace the brief's guessed `smoothing=0.5` with a measured
+value, selected against the 105 control points (never the holdouts) by leave-one-out
+cross-validation (LOO CV).
+
+**Decided:** Added `loo_errors()`, `run_loo_sweep()`, and `select_best()` to
+`scripts/make_fixture_dem.py`, plus a standalone `scripts/cv_sweep.py` CLI that prints the full
+sweep table and the winner. For each of 16 `(smoothing, neighbors)` combinations — the sweep grid
+`smoothing ∈ {0, 0.1, 0.5, 2.0}` × `neighbors ∈ {None, 10, 20, 40}`, exactly as specified — every
+one of the 105 control points is held out in turn, `RBFInterpolator` is refit on the other 104,
+and the held-out point's error is recorded; the combination is scored by median and p90 (90th
+percentile) absolute LOO error. `SMOOTHING`/`NEIGHBORS` in `make_fixture_dem.py` are now literals
+equal to `select_best(run_loo_sweep(control_points))`'s output, and
+`test_interpolation_parameters_match_cv_sweep_winner` asserts that equality directly against the
+committed CSV so the constants cannot silently drift from the measurement that justifies them.
+**Why:** Per the coordinator's explicit process — parameters must be selected against the control
+points, never tuned against the 10 holdouts, which exist to be the one independent check left
+(design doc §2.3). The full sweep table:
+
+| smoothing | neighbors | median LOO error (m) | p90 LOO error (m) |
+|---:|---:|---:|---:|
+| 0.0 | global | 14.55 | 97.15 |
+| 0.0 | 10 | 15.49 | 95.59 |
+| 0.0 | 20 | 14.43 | 92.23 |
+| 0.0 | 40 | 14.98 | 97.24 |
+| 0.1 | global | 14.55 | 97.15 |
+| 0.1 | 10 | 15.49 | 95.59 |
+| 0.1 | 20 | 14.43 | 92.23 |
+| 0.1 | 40 | 14.98 | 97.24 |
+| 0.5 | global | 14.55 | 97.15 |
+| 0.5 | 10 | 15.49 | 95.59 |
+| 0.5 | 20 | 14.43 | 92.23 |
+| 0.5 | 40 | 14.98 | 97.24 |
+| 2.0 | global | 14.55 | 97.15 |
+| 2.0 | 10 | 15.49 | 95.59 |
+| **2.0** | **20** | **14.43** | **92.22** |
+| 2.0 | 40 | 14.98 | 97.23 |
+
+Winner (bold): **`smoothing=2.0`, `neighbors=20`** — `select_best`'s literal argmin (lowest median,
+p90 as tie-break).
+
+**Investigated, not just accepted at face value:** `smoothing` has essentially *zero* measurable
+effect at any tested value — all four values give byte-for-byte identical median LOO error at a
+given `neighbors`, and the p90 values differ only by 0.01 m (92.22 vs 92.23 for `neighbors=20`;
+otherwise exactly equal), which is floating-point noise, not a real distinction. Checked why: this
+module fits `RBFInterpolator` in the local-metres coordinate frame chosen in the original Task 4
+(see that section above) for isotropic correctness, where control-point pairwise distances run
+94 m to 13.5 km. The thin-plate-spline kernel `phi(r) = r² log(r)` evaluates to roughly 4×10⁴ at
+the minimum pairwise distance and 1.9×10⁸ at the median — an additive `smoothing` term of 0-2
+sitting on the matrix diagonal is negligible against values of that magnitude, regardless of which
+of the four swept values is used. `smoothing=2.0` is therefore not a meaningfully "better" choice
+than 0/0.1/0.5 — it's what the argmin mechanically returns from a set of values that are, for
+practical purposes, indistinguishable at this scale. Recorded here rather than hand-picking a
+"nicer-looking" value from the tie, since the whole point of this fix round is a
+measurement-driven, auditable choice, not a judgment call dressed up as one.
+`neighbors=20` is the real signal — it beats `neighbors=None` (global) on both median (14.43 m vs
+14.55 m) and p90 (92.22-92.23 m vs 97.15 m), and beats `neighbors=10`/`40` on both metrics too.
+
+**Consequence — the summit undershoot is not fixed:** rebuilt `data/dem/sf_fixture_dem.tif` with
+the new parameters and resampled all 10 holdouts. Twin Peaks summit: 248.0 m sampled vs. 281.0 m
+actual (-33.0 m, was -33.5 m). Bernal Heights summit: 114.6 m sampled vs. 135.6 m actual (-21.0 m,
+was -21.1 m). Both still fail design doc §2.3's ±12 m tolerance; the other 8 of 10 holdouts remain
+within it (unchanged to within ~0.3 m of the previous build). **This is the legitimate
+"unachievable" result the coordinator asked to see if the data supported it, not a tuning
+failure**: a LOO sweep over the exact grid specified, scored the way specified, on the correct
+(control-only) data, still leaves two isolated summit holdouts more than 20-33 m off. Both are
+genuinely hard cases — Twin Peaks summit's nearest control points are on its own slopes (Twin
+Peaks south peak 275.5 m at ~500 m away, Twin Peaks Blvd switchback 230 m, Burnett Ave 210 m —
+all already *below* the summit itself), so any smooth interpolator fit through slope points has to
+undershoot a genuine local maximum with no data placed at its top; the same shape applies to
+Bernal Heights (Bernal Heights Blvd north/south sides at 120/110 m, both well below the 135.6 m
+summit). Reported to the coordinator as-is rather than force-fit; the tolerance call is theirs to
+make.
+
+**Consequence — in-hull clamping got slightly worse, not better:** the coordinator's hypothesis
+was that `neighbors` (a local fit) would reduce in-hull oscillation. Measured directly: in-hull
+clamped pixels went from 70,510 of 970,057 (7.27%, old global `smoothing=0.5` config) to 74,368 of
+970,057 (**7.67%**, new `smoothing=2.0, neighbors=20` config) — worse, not better. Total clamped
+pixels also rose slightly, from 41.04% to 42.27%. `ClampStats` gained `in_hull_clamped`/
+`in_hull_pixels` fields (computed via a `scipy.spatial.Delaunay` hull test against the control
+points, no new dependency — `scipy` is already a project dependency) so this figure is reported by
+`main()` and stored in `manifest.json` on every future build, not just measured once here.
+**Why the hypothesis didn't pan out, investigated:** `neighbors=20` selects the 20 nearest control
+points per query location and fits a local thin-plate spline among just those — for a query point
+near the edge of a locally sparse cluster (several exist in the SF control set: Golden Gate Park's
+interior, the Presidio, the Bayview/Candlestick area), 20 nearest neighbors can still span a wide
+area with large elevation swings (e.g. a park-floor point and a nearby hill crest both within the
+20 nearest), which does not obviously reduce oscillation versus a global fit — it just changes
+*which* points can pull a given location's estimate away from `[0, 300]`. This is left as an open
+question for whoever revisits interpolation strategy next, not resolved here.
+
+**Decided:** `interpolate_dem()` now passes `neighbors=NEIGHBORS` to `RBFInterpolator`; `main()` and
+`write_manifest()` additionally report/record `in_hull_clamped_pixel_count`,
+`in_hull_pixel_count`, `interpolation_smoothing`, and `interpolation_neighbors`.
+**Why:** Makes the fix-round parameters and their in-hull clamp consequence visible on every
+future build, not just in this decision log entry.
+
+**Decided:** Two of `test_fixture_dem.py`'s five `build_dem()` calls
+(`test_fixture_dem_is_deterministic`, `test_holdout_points_are_excluded_from_interpolation`) now
+pass `resolution_m=50.0` instead of the production 10 m default.
+**Why:** `neighbors=20` makes a full 10 m/2.4M-pixel grid evaluation take ~40 s (a local RBF fit
+per query point is intrinsically more expensive than the old global fit's single linear solve,
+~8 s at the same resolution). With five `build_dem()` calls in the test file, an all-10 m test
+suite would take ~3.5 minutes just for this file. Determinism and holdout-exclusion are both
+properties of the fit/hash code path, not of grid resolution — a coarser grid exercises the same
+logic in a fraction of the time (0.9 s at 50 m). The `dem_path` session fixture (used by the
+CRS/bbox, nodata, clamp-bounds, COG-structure, and sanity-check tests) stays at the real 10 m
+production resolution, built once per test session. Full-resolution (10 m) determinism is proven
+separately and is not weakened by this change: two full `make fixtures` runs after this fix
+produced identical `dem_data_sha256`/`dem_file_sha256`, recorded in task-4-report.md's fix-round
+section.
+
+**Alternatives rejected:** Hand-picking a smoothing value from the tie based on "which looks more
+principled" (rejected — defeats the purpose of a measurement-driven choice; `2.0` is reported
+as-is, with the tie itself documented as the real finding). Widening the ±12 m holdout tolerance
+unilaterally to make the two summit holdouts pass (rejected — explicitly the coordinator's
+instruction: report the achievable figure, let them make the tolerance call). Reducing the
+production DEM's resolution to speed up tests (rejected — `data/dem/sf_fixture_dem.tif` stays at
+the brief's specified 10 m; only two *test-only* `build_dem()` calls in `tmp_path` were changed,
+not the production default or the `dem_path` fixture other tests rely on for structural realism).
+Trying additional `neighbors` values beyond `{10, 20, 40}` or `smoothing` values beyond
+`{0, 0.1, 0.5, 2.0}` to chase a materially better score (rejected — out of scope for this fix
+round; the coordinator specified this exact grid, "at least" these values, and the four-value
+smoothing tie plus the summit undershoot surviving the winning config are themselves the
+reportable finding, not a reason to keep searching without being asked to).

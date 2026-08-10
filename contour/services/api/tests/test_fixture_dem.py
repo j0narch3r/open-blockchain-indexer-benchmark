@@ -32,10 +32,14 @@ from make_fixture_dem import (  # noqa: E402
     ELEVATION_MAX_M,
     ELEVATION_MIN_M,
     EXPECTED_HOLDOUT_COUNT,
+    NEIGHBORS,
     NODATA,
+    SMOOTHING,
     ControlPointValidationError,
     build_dem,
     load_control_points,
+    run_loo_sweep,
+    select_best,
     sha256_of,
 )
 
@@ -70,8 +74,14 @@ def test_fixture_dem_is_readable_and_covers_bbox(dem_path: Path) -> None:
 
 
 def test_fixture_dem_is_deterministic(tmp_path: Path) -> None:
-    a = build_dem(tmp_path / "a.tif")
-    b = build_dem(tmp_path / "b.tif")
+    # A coarser grid (50 m, not the production 10 m) keeps this test fast —
+    # `neighbors=20` (task-4 fix round 1) makes full-resolution builds
+    # ~40 s each, and determinism is a property of the fit/hash code path,
+    # not of grid resolution. Full-resolution (10 m) determinism is proven
+    # separately: two full `make fixtures` runs with identical
+    # `dem_data_sha256`/`dem_file_sha256`, recorded in task-4-report.md.
+    a = build_dem(tmp_path / "a.tif", resolution_m=50.0)
+    b = build_dem(tmp_path / "b.tif", resolution_m=50.0)
     assert sha256_of(a.path) == sha256_of(b.path)
     assert a.data_sha256 == b.data_sha256
 
@@ -166,8 +176,11 @@ def test_holdout_points_are_excluded_from_interpolation(tmp_path: Path) -> None:
             lines.append(f"{p.name},{p.lat},{p.lon},{p.ele_m},holdout,x,high\n")
     controls_only.write_text("".join(lines))
 
-    a = build_dem(tmp_path / "full.tif", csv_path=DEFAULT_CSV_PATH)
-    b = build_dem(tmp_path / "controls_only.tif", csv_path=controls_only)
+    # Coarser grid for speed, same reasoning as test_fixture_dem_is_deterministic
+    # — holdout exclusion is a property of which points reach the fit, not
+    # of grid resolution.
+    a = build_dem(tmp_path / "full.tif", csv_path=DEFAULT_CSV_PATH, resolution_m=50.0)
+    b = build_dem(tmp_path / "controls_only.tif", csv_path=controls_only, resolution_m=50.0)
     assert a.data_sha256 == b.data_sha256
 
 
@@ -188,6 +201,26 @@ def test_fixture_dem_values_are_within_clamp_bounds(dem_path: Path) -> None:
         arr = ds.read(1)
         assert float(arr.min()) >= ELEVATION_MIN_M
         assert float(arr.max()) <= ELEVATION_MAX_M
+
+
+# ---------------------------------------------------------------------------
+# Interpolation parameter selection (task-4 fix round 1) — `smoothing` and
+# `neighbors` must come from leave-one-out cross-validation on the control
+# points, never from tuning against the holdouts.
+# ---------------------------------------------------------------------------
+
+
+def test_interpolation_parameters_match_cv_sweep_winner() -> None:
+    """`SMOOTHING`/`NEIGHBORS` in make_fixture_dem.py must equal whatever
+    `select_best(run_loo_sweep(...))` actually picks — pins the constants
+    to the measurement that justifies them, so a hand-edit of one without
+    the other (or a hand-edit that silently stops matching the sweep) is
+    caught, not just documented."""
+    points = load_control_points(DEFAULT_CSV_PATH)
+    control_points = [p for p in points if p.role == "control"]
+    winner = select_best(run_loo_sweep(control_points))
+    assert winner.smoothing == SMOOTHING
+    assert winner.neighbors == NEIGHBORS
 
 
 # ---------------------------------------------------------------------------
