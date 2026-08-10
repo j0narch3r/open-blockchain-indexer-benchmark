@@ -219,16 +219,36 @@ The model is loaded from `contour/models/effort-v1.json`, versioned, with `model
 **Ascent with hysteresis.** Per-sample thresholding is wrong — 40 consecutive +0.9 m steps would sum to zero ascent under a naive `if delta > MIN_RISE_M` filter, and to +36 m under no filter. The correct algorithm is peak-valley detection:
 
 ```
-track running extreme (last confirmed turning point)
+direction = UNDETERMINED          # we do not know which way we are going yet
+anchor    = ele[0]                # last confirmed turning point
+extreme   = ele[0]                # running extreme since the anchor
+
 for each sample:
-    if direction is up:    extreme = max(extreme, ele)
-                           if ele < extreme - MIN_RISE_M:  commit rise, flip to down
-    if direction is down:  extreme = min(extreme, ele)
-                           if ele > extreme + MIN_RISE_M:  commit fall, flip to up
-commit the final open leg
+    if direction is UNDETERMINED:
+        extreme_hi = max(extreme_hi, ele); extreme_lo = min(extreme_lo, ele)
+        if ele >= anchor + MIN_RISE_M:  direction = UP;   extreme = ele
+        if ele <= anchor - MIN_RISE_M:  direction = DOWN; extreme = ele
+        # until one of those fires, nothing is committed — the series has
+        # not yet moved far enough to have a direction at all
+
+    if direction is UP:    extreme = max(extreme, ele)
+                           if ele <= extreme - MIN_RISE_M:
+                               commit (extreme - anchor) to ascent
+                               anchor = extreme; extreme = ele; direction = DOWN
+
+    if direction is DOWN:  extreme = min(extreme, ele)
+                           if ele >= extreme + MIN_RISE_M:
+                               commit (anchor - extreme) to descent
+                               anchor = extreme; extreme = ele; direction = UP
+
+commit the final open leg from anchor to extreme
 ```
 
-This ignores sub-metre wiggle while correctly accumulating a long shallow climb. A unit test pins both failure modes.
+**The initial phase is load-bearing and an earlier revision of this document omitted it.** Without an `UNDETERMINED` state the algorithm must assume a direction from the first sample pair, and a series that opens with sampling noise then locks to the wrong direction — which makes the flat-road-with-±0.4 m-noise case report spurious ascent. Task 6's implementer found this by testing rather than by reading, and added the phase.
+
+**The reversal boundary is inclusive (`>=` / `<=`).** A reversal of exactly `MIN_RISE_M` commits. This is a choice, not a derivation — 1.0 m is not sub-metre noise, so it should count — and it is pinned by a test at exactly `MIN_RISE_M` and at `MIN_RISE_M - 0.01` so a later refactor cannot move it silently.
+
+This ignores sub-metre wiggle while correctly accumulating a long shallow climb. Unit tests pin both failure modes.
 
 **Grade.** Computed over a **3-sample (30 m) centred window**, not sample-to-sample, because a 10 m baseline on 10 m data amplifies noise into phantom double-digit grades. `max_grade_pct` uses the same windowed series, so the honesty warnings are not driven by a single bad pixel.
 
