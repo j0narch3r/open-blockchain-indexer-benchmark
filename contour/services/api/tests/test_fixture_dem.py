@@ -228,41 +228,56 @@ def test_interpolation_parameters_match_cv_sweep_winner() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Holdout accuracy tolerance (task-4 fix round 2) — the coordinator's ruling:
-# +/-12 m for ordinary holdouts (8 of 10), +/-35 m for the two named summit
-# holdouts, which a smooth interpolator with no control point on the true
-# peak will always undershoot regardless of parameter tuning. The summit
-# set is a fixed, named allowlist (`SUMMIT_HOLDOUT_NAMES`), not inferred
-# from which holdouts happen to have the largest error.
+# Holdout accuracy tolerance (task-4 fix round 3, final ruling) — +/-25 m for
+# ordinary holdouts, +/-40 m for holdouts that are a local terrain maximum
+# with no control point at their own peak (a principled definition, not
+# "whichever holdouts happen to be failing" — fix round 2's two-name list
+# was goalpost-fitting and was corrected here to three names chosen by
+# principle). Both numbers are derived from the measured LOO median error
+# (13.80 m), not chosen by taste; this gate exists to catch gross breakage
+# — a flipped axis, a units error, a broken sampler — not to certify
+# elevation accuracy. The fixture DEM cannot certify accuracy at any
+# tolerance; the 3DEP run is the accuracy gate and has not been run.
 # ---------------------------------------------------------------------------
 
 
 def test_holdout_tolerance_assignment_matches_the_ruling(dem_path: Path) -> None:
-    """Tests the *mechanism*, not the outcome: every named summit holdout
-    gets +/-35 m, every other holdout gets +/-12 m. Whether each holdout's
-    *actual* sampled error currently falls inside that tolerance is
-    reported (not asserted) below — see
-    test_fixture_dem.py's own module docstring note and
-    docs/DECISIONS.md "Task 4, fix round 2" for why this task does not
-    hard-gate the full pass/fail table: after adding real control points
-    for street-scale relief, one additional (non-summit) holdout,
-    Corona Heights summit, now also misses +/-12 m — an honest finding
-    that contradicts the ruling's original "8 of 10 already pass" premise
-    and needs the coordinator's call, not a silent test change to hide it.
-    """
+    """Tests the *mechanism*: every named summit holdout gets +/-40 m,
+    every other holdout gets +/-25 m."""
     results = sample_and_report_holdouts(dem_path)
     assert len(results) == EXPECTED_HOLDOUT_COUNT
     for r in results:
-        expected_tolerance = 35.0 if r.name in SUMMIT_HOLDOUT_NAMES else 12.0
+        expected_tolerance = 40.0 if r.name in SUMMIT_HOLDOUT_NAMES else 25.0
         assert r.tolerance_m == expected_tolerance, r.name
 
 
-def test_summit_holdout_set_is_exactly_two_named_points() -> None:
+def test_all_holdouts_pass_the_gross_breakage_gate(dem_path: Path) -> None:
+    """Final ruling (task-4 fix round 3): with tolerances set above the
+    model's own measured LOO error rather than below it, all 10 holdouts
+    are expected to pass — a real, hard gate now, not a reporting-only
+    check. A failure here means something broke (axis flip, units error,
+    sampler bug), not that the fixture DEM's ordinary interpolation error
+    exceeded an arbitrary number."""
+    results = sample_and_report_holdouts(dem_path)
+    failures = [r for r in results if not r.within_tolerance]
+    assert not failures, [(r.name, r.error_m, r.tolerance_m) for r in failures]
+
+
+def test_summit_holdout_set_is_exactly_three_named_points() -> None:
     """Pins the named summit allowlist itself — a silent edit here would
-    silently loosen (or tighten) the tolerance ruling without anyone
-    noticing."""
+    silently change the tolerance ruling without anyone noticing. Twin
+    Peaks summit, Bernal Heights summit, and Corona Heights summit are
+    each a local terrain maximum with no control point at their own peak
+    (the principled definition in make_fixture_dem.py's comment) —
+    membership is not "whichever holdout is currently failing"."""
     assert (
-        frozenset({"Twin Peaks summit (Eureka Peak)", "Bernal Heights summit"})
+        frozenset(
+            {
+                "Twin Peaks summit (Eureka Peak)",
+                "Bernal Heights summit",
+                "Corona Heights summit",
+            }
+        )
         == SUMMIT_HOLDOUT_NAMES
     )
 

@@ -897,3 +897,131 @@ loosening of a test not yet committed to hide a real finding; scoped the test to
 *mechanism* instead and reported the actual numbers here and in the task report for a human
 decision). Re-tuning `neighbors` specifically to fix Corona Heights (rejected — would defeat the
 entire point of selecting parameters by LOO cross-validation rather than by outcome).
+
+---
+
+## Task 4, fix round 3 (final): the Filbert finding, the Corona Heights fragility, and the closing tolerance ruling
+
+### The most important result in this task
+
+**Before fix round 2, the fixture DEM sampled Filbert Street between Hyde and Leavenworth — one
+of the steepest streets in the United States, real-world grade 31.5% — at −6.3%: sloping the
+wrong way.** Not "smoothed to gentle." Inverted. A router built on that DEM would have offered
+that block as a mild downhill shortcut, with total confidence, because nothing in the DEM knew the
+hill existed — no assertion anywhere in the test suite could have caught it, because nothing in
+that area was ever checked against ground truth until this task specifically went looking. After
+adding a real, sourced control point at each end of that block, the same DEM samples the same two
+points at 30.8%, against the real, cited 31.5%.
+
+This is not a corner case. It is **SPEC §4.1's named failure mode, reproduced exactly**: "a router
+fed a DEM which smears [50-150 m relief] will confidently produce routes over hills it can't see."
+SPEC says this about 30 m SRTM. A sparse-control synthetic DEM interpolated across ~100 km² from
+~100 points is smoother than that in the gaps between samples — this fixture reproduced the trap
+by construction, not by accident, the moment fixtures-only was chosen over a real 3DEP run. The
+fix (targeted control points) only closes the trap at the specific places someone thought to add a
+point. **It does not, and cannot, close it everywhere.** The 3DEP run is the actual remedy and
+remains outstanding (design doc §2.4). Anyone tempted to treat this fixture DEM as "good enough"
+for a real accuracy claim should read this paragraph first.
+
+### A genuine fragility, for whoever runs the real 3DEP data next
+
+Fix round 2 added three new real, sourced, reasonably-placed control points — `Buena Vista Ave
+West near Haight` (65 m), `Buena Vista Ave East at Duboce` (50 m), and `Corona Heights base`
+(91 m) — none of them anywhere near an existing error. The result: **Corona Heights summit's
+holdout error moved from −5.9 m to −39.1 m, a 33.2 m swing, purely from three new low-elevation
+points entering its local 20-nearest-neighbor set and displacing two higher points (`Tank Hill`
+198 m, `Burnett Ave near Twin Peaks` 210 m) that used to anchor the local fit.** Total control
+density in the area only went up. The estimate at a specific nearby point got dramatically worse.
+
+This is a property of `neighbors=20` (a local RBF fit), not a bug in this task's data: a local fit
+depends on *exactly which* points land in the k-nearest window, and that window's composition can
+flip non-monotonically as points are added nearby, even when every added point is individually
+correct. **A global fit (`neighbors=None`) would not have this specific failure mode** — every
+point always contributes, so adding more real data can only ever add more real signal, never
+displace an existing neighbor from consideration — though a global fit has its own known
+weaknesses (see "Task 4, fix round 1": oscillation across the whole 105/118-point extent). This
+is flagged explicitly for whoever runs the real 3DEP-and-real-graph pipeline: **do not assume that
+adding more real elevation data to a local-neighbor RBF (or any k-nearest-neighbor-style
+interpolation) can only improve accuracy near existing points.** It can silently make a specific
+nearby estimate worse, and the only way to know is to keep checking held-out ground truth after
+every change — exactly the discipline this task's holdout set exists to enforce.
+
+### Closing ruling: summit defined by principle, tolerance set from measurement
+
+Coordinator's own correction, recorded verbatim in spirit: naming exactly the two holdouts that
+were failing in fix round 2 ("Twin Peaks and Bernal") was **goalpost-fitting** — the named
+exception should follow from a stated *reason*, not from which holdouts happened to be failing at
+the time. The reason was always "an interpolator undershoots a local maximum with no control point
+at its own peak." Applied consistently, that reason names **three** holdouts, not two — Corona
+Heights summit qualifies on the same structural grounds as Twin Peaks and Bernal Heights (its
+nearest control points, including two of fix round 2's own additions, are all on its slopes,
+below the peak).
+
+**Decided:** `SUMMIT_HOLDOUT_NAMES` in `scripts/make_fixture_dem.py` is now `frozenset({"Twin
+Peaks summit (Eureka Peak)", "Bernal Heights summit", "Corona Heights summit"})`, with a code
+comment stating the definition — *"a holdout that is a local terrain maximum with no control point
+at its own peak"* — so a future point added at any of these three peaks, or a future holdout that
+newly qualifies, can be judged against a written rule rather than against whatever currently fails.
+**Why:** exactly the coordinator's ruling; the alternative (leaving two names that happened to be
+convenient) would have been a tolerance that quietly tracks outcomes instead of a fixed, auditable
+rule.
+
+**Decided:** `HOLDOUT_TOLERANCE_M = 25.0` (non-summit), `SUMMIT_HOLDOUT_TOLERANCE_M = 40.0`
+(summit), replacing fix round 2's 12/35. Both derived from the measured 118-point LOO median error
+(13.80 m): 25 m ≈ 1.8x median, 40 m ≈ 2.9x median (the extra headroom over the non-summit number
+absorbs the systematic peak-undershoot every smooth interpolator exhibits at a true local maximum
+with no data on top of it, on top of the base LOO error every holdout carries).
+**Why the old ±12 m number was wrong, not just strict:** the model's own measured typical error
+(median LOO, 13.80 m) is *larger* than a ±12 m gate. A tolerance set below the model's demonstrated
+error rate doesn't test whether the DEM is broken — it tests whether a given holdout's error
+happens to land above or below the noise floor, which is not a meaningful pass/fail signal at all.
+That is why 8 of 10, then 7 of 10, kept almost-arbitrarily shuffling across fix rounds as control
+points changed: the gate was measuring noise. Every number in this ruling now sits *above* that
+noise floor by a stated, checkable margin.
+**The comment placed next to these constants states, verbatim in spirit:** this gate exists to
+catch **gross breakage** — a flipped axis, a units error, a broken sampler — not to certify
+elevation accuracy. The fixture DEM cannot certify accuracy at any tolerance. The 3DEP run is the
+accuracy gate, and it has not been run.
+
+**Decided:** `test_holdout_tolerance_assignment_matches_the_ruling` (mechanism: every named summit
+gets ±40 m, every other holdout gets ±25 m) and a new `test_all_holdouts_pass_the_gross_breakage_gate`
+(a real hard gate, `assert not failures` — fix round 2 deliberately did not hard-gate this, because
+the tolerance was still under dispute; it no longer is). All 10 holdouts pass under the final
+ruling:
+
+| Holdout | Actual | Sampled | Error | Tolerance | Summit? | Result |
+|---|---:|---:|---:|---:|:---:|:---:|
+| Twin Peaks summit (Eureka Peak) | 281.0 | 260.5 | −20.5 | ±40 | yes | OK |
+| Ferry Building | 2.0 | 1.1 | −0.9 | ±25 | no | OK |
+| Ocean Beach (at Judah) | 4.0 | 3.8 | −0.2 | ±25 | no | OK |
+| Alamo Square | 75.9 | 72.5 | −3.4 | ±25 | no | OK |
+| Corona Heights summit | 158.5 | 119.4 | −39.1 | ±40 | yes | OK |
+| Bernal Heights summit | 135.6 | 114.6 | −21.0 | ±40 | yes | OK |
+| Lands End | 50.0 | 60.3 | +10.3 | ±25 | no | OK |
+| Mission Dolores Park | 18.9 | 18.8 | −0.1 | ±25 | no | OK |
+| Fort Mason | 25.9 | 12.3 | −13.6 | ±25 | no | OK |
+| Candlestick Point | 4.0 | 3.8 | −0.2 | ±25 | no | OK |
+
+**10 of 10.** Note that Corona Heights summit's margin under its new ±40 m tolerance is 0.9 m —
+this is a real pass against a principled, measured tolerance, not a comfortable one; the fragility
+noted above means a future data change could push it back over the line, which is exactly why that
+fragility is documented rather than left implicit.
+
+**Decided: nothing about the interpolation or the data changed in this round.** No re-sweep, no
+re-tuned parameters, no added or moved control points. `smoothing=2.0, neighbors=20` (selected in
+fix round 1, re-confirmed unchanged in fix round 2) stands. `data/dem/sf_fixture_dem.tif`'s
+`dem_file_sha256` (`2cb640b2...`) and `dem_data_sha256` (`48351781...`) are byte-identical to fix
+round 2's build — verified directly (`sha256_of(DEFAULT_DEM_PATH)` re-run and compared) rather than
+assumed from "I didn't touch the generator's data path." Only `scripts/make_fixture_dem.py`'s
+tolerance constants and `services/api/tests/test_fixture_dem.py`'s corresponding tests changed.
+
+**Alternatives rejected:** Keeping the two-name exception set and widening tolerances just enough
+to pass Corona Heights as a one-off (rejected — the coordinator's explicit point: define the
+exception by the stated principle, not by patching around whichever holdout is inconvenient this
+round). Switching to `neighbors=None` (global fit) to eliminate the Corona Heights fragility
+(rejected — explicitly out of scope for this round: "the interpolation is settled"; also would
+undo fix round 1's own measured, LOO-selected choice for a reason not grounded in that same
+selection process). Treating the Corona Heights fragility as a one-off anomaly not worth recording
+(rejected — it is a real, general property of local-neighbor RBF interpolation that will recur
+under the real 3DEP/real-graph pipeline too, and costs nothing to write down once, here, for
+whoever hits it next).
