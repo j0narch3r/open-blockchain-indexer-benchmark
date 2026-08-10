@@ -10,8 +10,11 @@ data:
 	@echo "Use 'make fixtures' for the fixture data CI and tests rely on."
 
 # Generates the fixture DEM + graph used by tests and CI.
+# The DEM generator (Task 4) is real; the fixture graph generator lands in
+# a later task, so this target does not yet produce everything `make data`
+# eventually will.
 fixtures:
-	@echo "make fixtures: fixture-data generation lands in a later task."
+	cd $(API_DIR) && uv run python ../../scripts/make_fixture_dem.py
 
 # Runs the API dev server with autoreload.
 dev:

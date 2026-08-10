@@ -1,0 +1,116 @@
+name,lat,lon,ele_m,role,source,confidence
+Twin Peaks summit (Eureka Peak),37.755930,-122.447600,281.0,holdout,Wikipedia,high
+Ferry Building,37.795600,-122.393700,2.0,holdout,SF Port / news reporting,medium
+Ocean Beach (at Judah),37.760900,-122.510500,4.0,holdout,estimated from surrounding terrain,medium
+Alamo Square,37.776300,-122.434970,75.9,holdout,USGS GNIS,high
+Corona Heights summit,37.765900,-122.440600,158.5,holdout,Wikipedia,high
+Bernal Heights summit,37.738700,-122.415700,135.6,holdout,Wikipedia (sources vary 433-475 ft),medium
+Lands End,37.780900,-122.504000,50.0,holdout,estimated from surrounding terrain,medium
+Mission Dolores Park,37.759600,-122.426900,18.9,holdout,topozone/USGS,high
+Fort Mason,37.806500,-122.429700,25.9,holdout,topozone/USGS,high
+Candlestick Point,37.718100,-122.380200,4.0,holdout,topozone/USGS,medium
+Twin Peaks south peak (Noe),37.752200,-122.446800,275.5,control,Wikipedia,high
+Twin Peaks Blvd switchback west,37.756800,-122.450100,230.0,control,estimated from surrounding terrain,low
+Twin Peaks Blvd Clarendon curve,37.758000,-122.451500,200.0,control,estimated from surrounding terrain,low
+Burnett Ave near Twin Peaks,37.758000,-122.446000,210.0,control,estimated from surrounding terrain,low
+Mount Davidson summit,37.738500,-122.453000,282.9,control,Wikipedia,high
+Mount Sutro summit,37.757500,-122.453100,276.8,control,Wikipedia (sources vary 908-912 ft),medium
+Buena Vista Park summit,37.769000,-122.440200,175.3,control,Wikipedia,medium
+Museum Way and Roosevelt Way,37.764800,-122.439000,130.0,control,estimated from surrounding terrain,low
+States St and Corbett Ave,37.762500,-122.443700,110.0,control,estimated from surrounding terrain,low
+Roosevelt Way and 14th St,37.763800,-122.438600,120.0,control,estimated from surrounding terrain,low
+Bernal Heights Blvd north side,37.739500,-122.414500,120.0,control,estimated from surrounding terrain,low
+Bernal Heights Blvd south side,37.737500,-122.416500,110.0,control,estimated from surrounding terrain,low
+Coleridge St and Elsie St,37.742000,-122.417300,70.0,control,estimated from surrounding terrain,low
+Potrero Hill high point,37.760500,-122.400800,95.7,control,topozone/USGS,medium
+Nob Hill summit (California and Mason),37.791900,-122.411600,103.9,control,topozone (sources vary 338-351 ft),medium
+Russian Hill summit (Vallejo and Jones),37.799800,-122.417700,102.1,control,USGS/topozone,medium
+Telegraph Hill (Pioneer Park),37.802400,-122.405800,83.8,control,Wikipedia (sources vary 274-285 ft),medium
+Rincon Hill historic summit,37.787300,-122.392500,30.5,control,Wikipedia (heavily graded and altered; historic estimate),low
+Lone Mountain summit,37.777200,-122.452600,128.3,control,Wikipedia,medium
+Forest Hill high point,37.746600,-122.463500,184.1,control,neighborhood elevation source,medium
+Diamond Heights Red Rock Hill,37.742300,-122.437000,210.3,control,glenparkhistory.org,medium
+Diamond Heights Gold Mine Hill,37.744200,-122.439000,207.3,control,glenparkhistory.org,medium
+Diamond Heights Fairmount Hill,37.741200,-122.430400,164.6,control,glenparkhistory.org,medium
+Billy Goat Hill,37.744900,-122.432200,152.4,control,AllTrails (approximate),low
+Tank Hill,37.762500,-122.448500,198.1,control,Wikipedia,medium
+Strawberry Hill (Golden Gate Park),37.768600,-122.471200,123.1,control,Wikipedia (NAVD88),high
+Grand View Park (Turtle Hill),37.752100,-122.473700,203.0,control,Wikipedia,medium
+Presidio Inspiration Point,37.788900,-122.457400,78.6,control,Trailforks,medium
+Pacific Heights crest (Broadway and Baker),37.796300,-122.443600,112.8,control,neighborhood elevation source (sources vary 350-381 ft),medium
+Pacific Heights crest (Broadway and Divisadero),37.796300,-122.439600,106.7,control,neighborhood elevation source,medium
+Lands End Lookout visitor center,37.780900,-122.505800,55.0,control,estimated from surrounding terrain,medium
+Merrie Way parking (Lands End trailhead),37.780300,-122.509000,35.0,control,estimated from surrounding terrain,low
+Mile Rock overlook trail point,37.779500,-122.507000,30.0,control,estimated from surrounding terrain,low
+Embarcadero at Mission St,37.793000,-122.391700,3.0,control,estimated from surrounding terrain,medium
+Embarcadero at Washington St,37.796700,-122.395800,3.0,control,estimated from surrounding terrain,medium
+Justin Herman Plaza (Market and Embarcadero),37.795200,-122.395200,4.0,control,estimated from surrounding terrain,medium
+Battery St and Market St,37.793600,-122.398000,6.0,control,estimated from surrounding terrain,medium
+4th St and King St (Caltrain / Mission Bay),37.776600,-122.394200,4.0,control,estimated from surrounding terrain,medium
+Mission Bay Blvd and 4th St,37.770600,-122.392700,3.0,control,estimated from surrounding terrain,medium
+SoMa 5th St and Mission St,37.784000,-122.405100,12.0,control,estimated from surrounding terrain,medium
+SoMa Howard St and 7th St,37.776700,-122.410300,15.0,control,estimated from surrounding terrain,medium
+Financial District Montgomery St and California St,37.792900,-122.402500,15.0,control,estimated from surrounding terrain,medium
+Financial District Kearny St and Market St,37.788500,-122.404000,10.0,control,estimated from surrounding terrain,medium
+Marina Blvd and Fillmore St,37.805500,-122.435800,3.0,control,estimated from surrounding terrain,medium
+Marina Green (Marina Blvd and Scott St),37.806700,-122.440600,2.0,control,estimated from surrounding terrain,medium
+Chestnut St and Fillmore St,37.800600,-122.435800,12.0,control,estimated from surrounding terrain,medium
+Lower Fort Mason pier area,37.807500,-122.432200,3.0,control,estimated from surrounding terrain,medium
+Marina Blvd and Laguna St,37.806400,-122.433100,4.0,control,estimated from surrounding terrain,medium
+Upper Fort Mason parade ground,37.806000,-122.428000,24.0,control,estimated from surrounding terrain,medium
+16th St and Mission St (BART plaza),37.764800,-122.419400,30.0,control,estimated from surrounding terrain,medium
+24th St and Mission St,37.752400,-122.418300,35.0,control,estimated from surrounding terrain,medium
+Valencia St and 16th St,37.764900,-122.421700,28.0,control,estimated from surrounding terrain,medium
+Cesar Chavez St and Mission St,37.748400,-122.418500,20.0,control,estimated from surrounding terrain,medium
+Church St and 18th St,37.761600,-122.426600,25.0,control,estimated from surrounding terrain,medium
+Dolores St and 20th St,37.758000,-122.426200,15.0,control,estimated from surrounding terrain,medium
+Guerrero St and 18th St,37.761400,-122.424100,22.0,control,estimated from surrounding terrain,medium
+3rd St and Palou Ave (Bayview),37.732500,-122.388400,15.0,control,estimated from surrounding terrain,medium
+Innes Ave and Hunters Point Blvd,37.732700,-122.373500,6.0,control,estimated from surrounding terrain,low
+3rd St and Evans Ave,37.745400,-122.387800,8.0,control,estimated from surrounding terrain,medium
+Candlestick Point boat launch,37.715900,-122.378500,2.0,control,estimated from surrounding terrain,low
+Jack Murphy Field area,37.720500,-122.380600,5.0,control,estimated from surrounding terrain,low
+Alex Pitcher Jr community area,37.719200,-122.377500,4.0,control,estimated from surrounding terrain,low
+Ocean Beach at Lincoln Way (Great Hwy),37.766300,-122.510700,4.0,control,estimated from surrounding terrain,medium
+Judah St and La Playa St,37.760500,-122.509700,5.0,control,estimated from surrounding terrain,medium
+Great Hwy and Judah St,37.760700,-122.511200,3.0,control,estimated from surrounding terrain,medium
+Judah St and 45th Ave,37.760700,-122.508500,8.0,control,estimated from surrounding terrain,medium
+Kirkham St and Great Hwy,37.757600,-122.511200,4.0,control,estimated from surrounding terrain,medium
+19th Ave and Judah St,37.761600,-122.476300,24.0,control,estimated from surrounding terrain,medium
+19th Ave and Sloat Blvd,37.735700,-122.476300,30.0,control,estimated from surrounding terrain,medium
+9th Ave and Irving St,37.763800,-122.465700,25.0,control,estimated from surrounding terrain,medium
+24th Ave and Noriega St,37.752900,-122.481600,35.0,control,estimated from surrounding terrain,medium
+34th Ave and Kirkham St,37.757600,-122.493800,45.0,control,estimated from surrounding terrain,medium
+Sunset Blvd and Taraval St,37.742000,-122.495400,30.0,control,estimated from surrounding terrain,medium
+Geary Blvd and Park Presidio Blvd,37.780700,-122.470800,35.0,control,estimated from surrounding terrain,medium
+Balboa St and 25th Ave,37.776100,-122.483100,50.0,control,estimated from surrounding terrain,medium
+Clement St and 6th Ave,37.782800,-122.462200,45.0,control,estimated from surrounding terrain,medium
+Cabrillo St and 40th Ave,37.771700,-122.503100,30.0,control,estimated from surrounding terrain,medium
+Fulton St and 25th Ave (Golden Gate Park north edge),37.771000,-122.483200,40.0,control,estimated from surrounding terrain,medium
+JFK Dr near Conservatory of Flowers,37.771900,-122.460200,32.0,control,estimated from surrounding terrain,medium
+JFK Dr near de Young Museum,37.771500,-122.468500,45.0,control,estimated from surrounding terrain,medium
+MLK Dr near 25th Ave (Golden Gate Park),37.766600,-122.483100,25.0,control,estimated from surrounding terrain,medium
+Golden Gate Park at Great Hwy (west end),37.769900,-122.510000,8.0,control,estimated from surrounding terrain,medium
+Lake Merced Blvd north shore,37.727400,-122.490600,6.0,control,estimated from surrounding terrain,medium
+Lake Merced south end (Skyline Blvd),37.719600,-122.493400,8.0,control,estimated from surrounding terrain,medium
+Islais Creek Channel (3rd St bridge),37.742300,-122.387900,3.0,control,estimated from surrounding terrain,medium
+Duboce Ave and Market St (Duboce Triangle),37.769900,-122.430800,30.0,control,estimated from surrounding terrain,low
+Wiggle corridor floor (Waller and Steiner),37.771200,-122.432600,28.0,control,estimated from surrounding terrain,low
+Panhandle (Oak St and Baker St),37.771600,-122.443700,24.0,control,estimated from surrounding terrain,low
+Glen Canyon Park floor (Elk St entrance),37.744900,-122.439600,68.6,control,sfrecpark.org / topozone,medium
+Portola Drive saddle (near O'Shaughnessy Blvd),37.744700,-122.444100,152.4,control,estimated from surrounding terrain,low
+Alemany gap / Bernal Cut floor (San Jose Ave and 30th St),37.739500,-122.423000,30.0,control,estimated from surrounding terrain,low
+Presidio Lombard Gate,37.799500,-122.452300,15.0,control,estimated from surrounding terrain,low
+Castro St and Market St (upper Market),37.762600,-122.435000,70.0,control,estimated from surrounding terrain,medium
+Church St and Market St,37.767700,-122.429100,40.0,control,estimated from surrounding terrain,medium
+Haight St and Ashbury St,37.769900,-122.446800,60.0,control,estimated from surrounding terrain,medium
+Fillmore St and Geary Blvd,37.784400,-122.433000,45.0,control,estimated from surrounding terrain,medium
+Divisadero St and Haight St,37.771200,-122.437600,62.0,control,estimated from surrounding terrain,medium
+Van Ness Ave and Market St,37.774900,-122.419400,20.0,control,estimated from surrounding terrain,medium
+Van Ness Ave and California St,37.790800,-122.421300,45.0,control,estimated from surrounding terrain,medium
+24th St and Castro St (Noe Valley),37.750800,-122.434200,55.0,control,estimated from surrounding terrain,medium
+Chenery St and Diamond St (Glen Park BART),37.733300,-122.433500,45.0,control,estimated from surrounding terrain,medium
+Ocean Ave and Phelan Ave,37.724700,-122.452600,40.0,control,estimated from surrounding terrain,medium
+Hayes St and Steiner St,37.776500,-122.433500,73.0,control,estimated from surrounding terrain,medium
+Fulton St and Scott St,37.776800,-122.437000,68.0,control,estimated from surrounding terrain,medium
+Divisadero St and Grove St,37.774500,-122.437600,65.0,control,estimated from surrounding terrain,medium

@@ -45,6 +45,24 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 strict = true
 python_version = "3.12"
 
+# rasterio ships no py.typed marker and no `types-rasterio` stub package
+# exists on PyPI (checked Task 4) — mypy strict has no way to type-check
+# against it. Narrowly scoped to the one module, not a blanket
+# ignore_missing_imports, per docs/DECISIONS.md Task 4.
+[[tool.mypy.overrides]]
+module = "rasterio.*"
+ignore_missing_imports = true
+
+# `scripts/make_fixture_dem.py` lives outside `services/api` (design doc
+# §8 repo layout) and is loaded at test runtime via an explicit
+# `sys.path.insert` in tests/test_fixture_dem.py, not as an installed or
+# in-tree package — mypy's project root here has no static view of it.
+# See docs/DECISIONS.md Task 4 for why the generator itself isn't folded
+# into `services/api` instead.
+[[tool.mypy.overrides]]
+module = "make_fixture_dem"
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 filterwarnings = [

@@ -414,3 +414,183 @@ routes' numbers from an actual (if simplified) physics/ranking calculation inste
 mutually-consistent constants (rejected — that calculation is `effort.py`/`ranker.py`'s job
 (Task 11/Task 13), which do not exist yet; hand-picking numbers that satisfy the same *invariants*
 those modules will eventually enforce is the correct scope for a fixture task).
+
+---
+
+## Task 4: Fixture DEM generator and data manifest
+
+**Decided:** `data/fixtures/elevation_control_points.csv` is the prior agent's validated draft
+(`elevation_control_points.draft.csv`), copied in verbatim — 115 rows, 105 `control` / 10
+`holdout`, columns `name,lat,lon,ele_m,role,source,confidence`. This task did not re-author or
+edit any row.
+**Why:** Per the task's explicit instruction ("do not invent your own points"); the file was
+already validated (bbox membership, elevation range, exactly 10 holdouts, no duplicate
+coordinates — reconfirmed here by `load_control_points()`'s own structural checks, which the
+committed file passes as-is).
+
+**Decided:** `scripts/make_fixture_dem.py` (outside `services/api`, per design doc §8's repo
+layout) does the following, in order: (1) `load_control_points()` reads and structurally
+validates the CSV — bbox membership, `ele_m` in `[0, 290]`, exactly 10 holdout rows, no duplicate
+`(lat, lon)` pairs — raising `ControlPointValidationError` naming the first violation rather than
+repairing anything; (2) `build_dem()` filters to `role == "control"` rows only before calling
+`interpolate_dem()`; (3) `interpolate_dem()` projects control points and the output grid to a
+local equirectangular metre frame (see below) and fits
+`scipy.interpolate.RBFInterpolator(kernel="thin_plate_spline", smoothing=0.5)` — the brief's exact
+parameters, unchanged; (4) the raw interpolated surface is clamped to `[0, 300]` m, with
+low/high clamp counts tracked separately; (5) `write_cog()` writes the array via GDAL's `COG`
+driver (tiled 512x512, `deflate`, internal overviews); (6) `write_manifest()` emits
+`data/manifest.json`.
+**Why:** Matches brief Steps 1-5, adjusted by the task's five resolutions (below).
+
+**Decided:** Control points and the output grid are projected from (lon, lat) degrees to a local
+equirectangular metre frame — `x_m = (lon - west) * meters_per_degree_lon`,
+`y_m = (lat - south) * meters_per_degree_lat`, with `meters_per_degree_lon` scaled by
+`cos(mean_lat)` — before being handed to `RBFInterpolator`, rather than fitting directly in raw
+(lon, lat) degree-space.
+**Why:** A degree of longitude at SF's latitude (~37.77°N) is about 21% shorter in metres than a
+degree of latitude (`cos(37.77°) ≈ 0.79`). Fitting the RBF directly in degree-space would make its
+implicit Euclidean distance metric anisotropic — the interpolator's smoothing radius would reach
+~26% farther east-west than the same "distance" reaches north-south, with no physical
+justification. Projecting to metres first makes "smooth" mean the same thing in both directions,
+which matters directly for whether the Wiggle corridor comes out as a genuine saddle rather than
+an accidentally lopsided one. No new dependency — plain `numpy`/`math`.
+**Verified:** the row/column axis convention (row 0 = north edge, column 0 = west edge, matching
+both the grid's own coordinate generation and the `Affine` transform passed to `write_cog`) is
+spelled out in an inline comment in `interpolate_dem()` specifically because a flipped axis here
+is the exact silent-failure mode task-4's resolution #4 warns about — it would pass every
+structural test (CRS, dtype, bounds, no-nodata, COG layout) and still produce a mirrored city. The
+four-point sanity check (below) is what actually catches it.
+
+**Decided (resolution #1, determinism):** `build_dem()` returns a `DemBuildResult` dataclass
+carrying both `file_sha256` (the written `.tif`'s raw bytes) and `data_sha256` (the raw
+`float32` array's bytes, independent of any GeoTIFF header/tag/overview encoding). Both are
+asserted equal across two separate `build_dem()` calls in
+`test_fixture_dem_is_deterministic`. No RNG is used anywhere in the module.
+**Why:** Per the task's resolution — "if two runs differ, find out why and fix the cause; do not
+paper over it by excluding bytes from the hash." Hashing the array separately from the file
+proves the *interpolation* is deterministic even if some future writer change made file bytes
+vary (e.g. a different GDAL build embedding a timestamp) — that would show up as
+`data_sha256` still matching while `file_sha256` diverges, which is a more diagnostic signal than
+one hash going right or wrong together.
+**Verified live:** built two files 1.1 s apart with a throwaway script before writing any
+production code — byte-identical (`sha256` equal) despite the wall-clock gap, confirming GDAL's
+`COG` driver embeds no timestamp here. `make fixtures` was then run twice in this task and
+produced identical `dem_data_sha256`/`dem_file_sha256` both times (only `generated_at` and the
+derived `manifest_sha256` differed, as expected — `generated_at` is real wall-clock time and is
+the one deliberately time-varying field in the manifest).
+
+**Decided (resolution #2, nodata):** `nodata=-9999` is set as raster metadata, but the RBF surface
+is evaluated over every pixel of the grid (a global interpolant defined everywhere), so no pixel
+is ever *written* as nodata. `test_fixture_dem_has_zero_nodata_pixels` asserts
+`(arr == NODATA).sum() == 0` against the real committed DEM, not just a claim.
+**Why:** Exactly the resolution's ask — a DEM with holes would make routes silently unscoreable.
+
+**Decided (resolution #3, clamping — reported, not just applied):** `ClampStats` tracks
+`clamped_low`/`clamped_high`/`total_pixels` separately and `main()` prints both the count and the
+percentage. On the committed `data/dem/sf_fixture_dem.tif`: **1,004,086 of 2,446,884 pixels
+(41.0%) were clamped** — 998,262 low (below 0 m), 5,824 high (above 300 m).
+**Why this number is what it is, investigated rather than waved off:** a `Delaunay`-based
+convex-hull check (run as a one-off diagnostic, not committed) shows only 39.6% of the grid falls
+inside the convex hull of the 105 control points at all — `SF_BBOX` includes large stretches of
+open SF Bay, Pacific Ocean, and bbox margin beyond the peninsula that intentionally have zero
+control points (there is no SF elevation to put there). Of the pixels *outside* the hull, 63.2%
+were clamped (nearly all low — the TPS trends toward negative/underwater far from any land point,
+which clamps to sea level, a physically reasonable answer for water even though it is
+extrapolation, not interpolation). Of the pixels *inside* the hull — nominally "should have real
+land data nearby" — 7.2% (64,686 of 970,057) were still clamped (64,410 low, 5,824+ high),
+consistent with `smoothing=0.5` letting the surface swing past `[0, 300]` between sparse or
+conflicting nearby points rather than being pinned exactly at them.
+**Consequence flagged for Task 5:** sampling the 10 held-out landmarks against the committed DEM
+gives errors of 33.5 m (Twin Peaks summit) and 21.1 m (Bernal Heights summit) — both outside the
+design doc §2.3's stated ±12 m widened tolerance — while the other 8 holdouts are within 12 m
+(several within 1 m). This is `smoothing=0.5` (the brief's specified value, kept as-is — not this
+task's parameter to change) systematically flattening sharp, relatively isolated summits toward
+their (lower) surrounding points. Recorded here rather than fixed unilaterally because Step 4 of
+the brief fixes `smoothing=0.5` explicitly and is not listed among this task's five ambiguity
+resolutions; Task 5 (or a follow-up) will need to either widen the summit tolerance further,
+special-case peak holdouts, or revisit the smoothing parameter with its own justification.
+**Not fixed by adding more control points:** this task's brief says not to re-author the control
+point table; adding water-boundary anchor points to tame the extrapolation would be exactly that.
+
+**Decided (resolution #5, COG validity):** Used GDAL's native `COG` driver
+(`rasterio.open(..., driver="COG", blocksize=512, compress="deflate", overview_resampling="average")`)
+rather than adding the `rio-cogeo` package. Verified structurally, not just by assuming the flag
+name is enough: `ds.profile["tiled"] is True`, `ds.block_shapes == [(512, 512)]`,
+`ds.tags(ns="IMAGE_STRUCTURE")["LAYOUT"] == "COG"`, and `len(ds.overviews(1)) > 0` are all asserted
+in `test_fixture_dem_is_a_valid_cog_structure` against the real committed file.
+**Why:** `rio-cogeo` is not installed in this environment and is not already a project dependency;
+its main value over the raw `COG` driver is a standalone *validator* CLI/function
+(`cog_validate`), but GDAL's `COG` driver is itself the reference implementation the COG spec is
+built around (correct tile layout, overviews written before the full-resolution IFD, correct
+ghost-area header) — using it to *write* the file already guarantees the structure `rio-cogeo`
+would otherwise be checking for. Confirmed the driver is present in this environment's GDAL build
+(3.12.4) before relying on it, rather than assuming. Adding a new dependency whose only benefit
+here would be re-deriving a guarantee the writer already provides was judged not worth the
+`docs/DECISIONS.md` justification it would need under "do not add a dependency without recording
+the reason."
+
+**Decided (resolution #4, shape sanity check):** `sample_and_report_sanity()` in the script (and a
+matching parametrized test) samples the finished DEM at Twin Peaks (37.7559, -122.4476), SoMa /
+5th & Folsom (37.7800, -122.4050), Ocean Beach (37.7609, -122.5105), and Duboce & Market (37.7695,
+-122.4290). Actual sampled values on the committed DEM: Twin Peaks 247.5 m (expected 230-290),
+SoMa 10.1 m (expected 0-20), Ocean Beach 3.8 m (expected 0-15), Duboce & Market 30.4 m. The
+Duboce & Market upper bound was widened from the resolution's literal "roughly 30" to 35 m in both
+the script's own reporting and the test, since the nearest control points to that exact coordinate
+range from 24 m (Panhandle) to 40 m (Church & Market) with the 30 m Duboce/Market point closest —
+30.4 m is the RBF smoothing that point slightly toward its higher neighbor, not a sign of a
+flipped axis or wrong data (a real flipped-axis bug would land at 150+ m or below sea level here,
+not 0.4 m over a rounded verbal guideline).
+**Why:** Exactly the resolution's ask — this is the check that would catch a mis-signed longitude
+or transposed row/column axis, which passes every other test in this suite.
+
+**Decided:** `resolution_m=10.0` grid dimensions are computed from `SF_BBOX`, not hardcoded —
+`width = round((east - west) / dx_deg)`, `height = round((north - south) / dy_deg)`, where
+`dx_deg`/`dy_deg` come from the same equirectangular metre conversion above. On `SF_BBOX` this
+yields a 1628 x 1503 grid (2,446,884 pixels).
+**Why:** `SF_BBOX` is `constants.py`'s single source of truth (Global Constraints); hardcoding grid
+dimensions would silently desync from it if the bbox ever changed.
+
+**Decided:** Added two `[[tool.mypy.overrides]]` entries to `services/api/pyproject.toml`:
+`rasterio.*` and `make_fixture_dem`, both `ignore_missing_imports = true`.
+**Why:** `rasterio` ships no `py.typed` marker and no `types-rasterio` stub package exists on
+PyPI (checked directly, not from memory) — this is the first module in the codebase to import
+`rasterio` (Task 1 declared it as a dependency; nothing used it until now), so the gap hadn't
+surfaced yet. `make_fixture_dem` is imported by `tests/test_fixture_dem.py` via a runtime
+`sys.path.insert` (the module lives in `scripts/`, outside `services/api`, per design doc §8's
+repo layout) — mypy's project root has no static view of a module reached that way, and there is
+no way to give it one without moving the generator into the `services/api` tree, which the repo
+layout deliberately does not do. Both overrides are scoped to the single named module, not a
+blanket `ignore_missing_imports`, so no other missing-stub gap is silently masked. Not a new
+dependency.
+
+**Decided:** `scripts/` is not covered by `make verify`'s `ruff check`, `ruff format --check`, or
+`mypy` (all three run `cd services/api && ...`, and `scripts/` is a sibling directory). Ran all
+three manually against `scripts/make_fixture_dem.py` during this task (clean after one line-length
+fix) but did not add a fifth `make verify` recipe line to cover it going forward.
+**Why:** `make verify`'s four checks are pinned exactly as Task 1 specified ("Matches the brief
+exactly (four checks)"); adding a fifth check that runs a different tool invocation over a
+different directory is a real scope decision (what should CI do if `scripts/` and `services/api`
+disagree on ruff config, e.g.) that belongs to whoever owns the `scripts/` directory's long-term
+convention, not something to slip in as a side effect of this task. Flagged here so a future task
+can decide deliberately. One concrete gap already observed doing this: `scripts/make_fixture_dem.py`
+also triggers a `scipy.interpolate` "missing library stubs" mypy note when checked with
+`--strict` directly (no `types-scipy-stubs`/`scipy-stubs` installed) — not fixed here for the same
+reason the `rasterio`/`make_fixture_dem` overrides above were scoped narrowly to what
+`make verify` actually runs.
+
+**Decided:** `Makefile`'s `fixtures` target now runs
+`cd services/api && uv run python ../../scripts/make_fixture_dem.py` (previously a stub echo).
+**Why:** Brief Step 6. The fixture *graph* generator (also implied by `make fixtures`'s docstring
+in design doc §2.4) is a later task's job — this target does not yet produce everything `make
+data`'s eventual real pipeline will; comment updated to say so rather than implying completeness.
+
+**Alternatives rejected:** Fitting the RBF in raw (lon, lat) degree-space (rejected — anisotropic
+distance metric, see above). Adding `rio-cogeo` as a dependency to validate the COG (rejected —
+GDAL's `COG` driver already provides the guarantee it would check for; see above). Silently
+clamping without counting/reporting (rejected — explicitly the resolution's ask; 41% clamped is
+exactly the kind of number that needs to be visible, not buried). Tightening `smoothing` to fix
+the Twin Peaks/Bernal Heights holdout error (rejected for this task — the brief fixes
+`smoothing=0.5` explicitly as a Step 4 parameter, not listed as one of the five ambiguities this
+task was asked to resolve; changing it unilaterally would be re-litigating a settled instruction,
+not resolving an underspecified one). Adding synthetic water-boundary control points to reduce
+extrapolation (rejected — the control-point table is explicitly not this task's to re-author).

@@ -1,0 +1,18 @@
+{
+  "bbox": [
+    -122.535,
+    37.7,
+    -122.35,
+    37.835
+  ],
+  "clamped_pixel_count": 1004086,
+  "control_point_count": 105,
+  "control_point_sha256": "680a33be3df2ad8d61ad4e5ec4234fbf44811b1ca93f97c02274adc223fa3d80",
+  "dem_data_sha256": "43292011e0bef8447d4e3ebe83fecb632cd0baa89830fa3310d2e0a337a46462",
+  "dem_file_sha256": "c0a8ea56bf2b9f91827eae40a4f36242d30cbcd1cd64c6615c443ebbe942adf7",
+  "dem_path": "dem/sf_fixture_dem.tif",
+  "generated_at": "2026-08-10T00:25:48.337937+00:00",
+  "manifest_sha256": "96bd87a0272542c631c80f77f6f2de39a07b442e54a81d63b5f7da82549ed4c5",
+  "source": "fixture",
+  "total_pixel_count": 2446884
+}
