@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import math
+from pathlib import Path
 from typing import Iterable
 
 # Degrees per metre near 37.77 N.
@@ -147,6 +148,18 @@ def polychain(name: str, highway: str, pts: list[Pt], **props: object) -> None:
     """Emit one feature per consecutive pair of an explicit polyline."""
     for a, b in zip(pts, pts[1:]):
         way(name, highway, [a, b], **props)
+
+
+def segments(name: str, highway: str, segs: list[list[Pt]], **props: object) -> None:
+    """Emit one feature per segment, each carrying its own shape points.
+
+    Used for switchback roads, where a block between two junctions has real
+    traversal length well above the straight-line distance.  Drawing those
+    hairpins as shape points inside one feature keeps the feature count
+    honest while giving the way its true length.
+    """
+    for pts in segs:
+        way(name, highway, pts, **props)
 
 
 # ==========================================================================
@@ -470,25 +483,39 @@ chain("turk", "secondary",
 # ==========================================================================
 # 5.  BUENA VISTA PARK AND THE HAIGHT RIDGE
 # ==========================================================================
+# The ring road runs round the *perimeter* of Buena Vista Park, not over it.
+# Revision 1 drew it 130-200 m inside the boundary, which put it within ~90 m
+# of the sourced 175.3 m summit and made the DEM read it as a climb up the
+# hill.  The east and west sides are pinned to the two sourced park-base
+# control points, and each side is given its real curved length.
 bv_south = free("bv_south", -122.440300, 37.766200)
-polychain("Buena Vista Avenue East", "residential", [
-    node("haight", "baker"),
-    free("bve1", -122.440300, 37.769200),
-    free("bve2", -122.439800, 37.768200),
-    free("bve3", -122.439600, 37.767200),
-    bv_south,
+bv_east_base = free("bv_east_base", -122.438000, 37.769000)
+segments("Buena Vista Avenue East", "residential", [
+    [node("haight", "baker"),
+     free("bve1", -122.439300, 37.770100),
+     bv_east_base],
+    [bv_east_base,
+     free("bve2", -122.437800, 37.768200),
+     free("bve3", -122.438400, 37.767400)],
+    [free("bve3", -122.438400, 37.767400),
+     free("bve4", -122.439400, 37.766600),
+     bv_south],
 ])
-polychain("Buena Vista Avenue West", "residential", [
-    node("haight", "central"),
-    free("bvw1", -122.443200, 37.769000),
-    free("bvw2", -122.442600, 37.767800),
-    free("bvw3", -122.441600, 37.766800),
-    bv_south,
+segments("Buena Vista Avenue West", "residential", [
+    [node("haight", "central"),
+     free("bvw1", -122.443600, 37.769800),
+     free("bvw2", -122.443400, 37.768900)],
+    [free("bvw2", -122.443400, 37.768900),
+     free("bvw3", -122.443000, 37.767600)],
+    [free("bvw3", -122.443000, 37.767600),
+     free("bvw4", -122.442200, 37.766700),
+     bv_south],
 ])
+# Buena Vista Avenue is the short link from the park's east base up to
+# Duboce Avenue at Castro/Divisadero.
 polychain("Buena Vista Avenue", "residential", [
-    bv_south,
-    free("bva1", -122.439000, 37.766400),
-    free("bva2", -122.437500, 37.767800),
+    bv_east_base,
+    free("bva1", -122.437300, 37.769300),
     node("duboce", "castro"),
 ])
 
@@ -538,7 +565,9 @@ polychain("Market Street", "secondary", [
     free("mkt_u2", -122.439000, 37.761000),
     mkt_corbett,
     mkt_clayton,
-    free("mkt_u3", -122.444500, 37.756600),
+    # revision 3: was -122.444500, which bowed Market ~230 m west of its
+    # real line into the Twin Peaks hillside it does not cross.
+    free("mkt_u3", -122.442700, 37.756200),
     free("mkt_u4", -122.442500, 37.752000),
     mkt_portola,
 ], bicycle="yes")
@@ -770,30 +799,64 @@ polychain("Portola Drive", "primary", [
     free("por2", -122.452000, 37.745600),
     free("por3", -122.457000, 37.744000),
 ], bicycle="yes")
-polychain("Twin Peaks Boulevard", "tertiary", [
-    tpb_south,
-    free("tpb1", -122.447200, 37.749000),
-    free("tpb2", -122.446600, 37.750800),
-    free("tpb3", -122.447000, 37.752600),
-    tpb_cross,
-    free("tpb4", -122.448400, 37.755000),
-    free("tpb5", -122.449500, 37.756400),
-    tpb_north,
+# Twin Peaks Boulevard is a switchback road.  Revision 1 drew it as a near
+# straight line between junctions, losing about half its traversal length and
+# therefore doubling every sampled grade.  The junction nodes are unchanged -
+# several elevation control points are pinned to them - and the real hairpins
+# are restored as shape points inside each block.
+tpb1 = free("tpb1", -122.447200, 37.749000)
+tpb2 = free("tpb2", -122.446600, 37.750800)
+tpb3 = free("tpb3", -122.447000, 37.752600)
+tpb4 = free("tpb4", -122.448400, 37.755000)
+tpb5 = free("tpb5", -122.449500, 37.756400)
+segments("Twin Peaks Boulevard", "tertiary", [
+    [tpb_south, free("sw_a0", -122.444800, 37.747500),
+     free("sw_a", -122.446000, 37.748300), tpb1],
+    [tpb1, free("sw_b0", -122.444500, 37.749400),
+     free("sw_b", -122.445600, 37.750200), tpb2],
+    [tpb2, free("sw_c", -122.444400, 37.751300),
+     free("sw_d", -122.444800, 37.752300), tpb3],
+    [tpb3, free("sw_e", -122.445200, 37.753300), tpb_cross],
+    [tpb_cross, free("sw_f", -122.447800, 37.754600), tpb4],
+    [tpb4, free("sw_g", -122.449800, 37.755400), tpb5],
+    [tpb5, free("sw_h", -122.450800, 37.756800), tpb_north],
 ], bicycle="yes")
-polychain("Twin Peaks Boulevard", "tertiary", [
-    tpb_cross,
-    free("tpe1", -122.446000, 37.755000),
-    free("tpe2", -122.445600, 37.756200),
-    free("tpe3", -122.446200, 37.757400),
-    tpb_north,
+tpe3 = free("tpe3", -122.446200, 37.757400)
+segments("Twin Peaks Boulevard", "tertiary", [
+    [tpb_cross, free("tpe1", -122.446000, 37.755000)],
+    [free("tpe1", -122.446000, 37.755000),
+     free("tpe1b", -122.445200, 37.755700),
+     free("tpe2", -122.445600, 37.756200)],
+    [free("tpe2", -122.445600, 37.756200),
+     free("tpe2b", -122.445200, 37.757000), tpe3],
+    # descends through the sourced "Twin Peaks Blvd descent to Clarendon"
+    # control point rather than bulging north off it
+    [tpe3, free("tpe4", -122.448800, 37.757400), tpb_north],
 ], bicycle="yes")
 way("Christmas Tree Point Road", "service",
     [tpb_cross, free("ctp", -122.445500, 37.754500)], bicycle="yes")
-polychain("Clarendon Avenue", "secondary", [
-    tpb_north,
-    free("cla1", -122.449000, 37.758400),
-    free("cla2", -122.446000, 37.758800),
-    mkt_clayton,
+# Clarendon Avenue runs WEST/SOUTH-WEST from Twin Peaks Boulevard, below
+# Sutro Tower, past Panorama Drive, down to Laguna Honda Boulevard.  Revision
+# 1 ran it EAST from Twin Peaks Blvd to Market at Clayton, across the north
+# shoulder of Twin Peaks.  No road crosses there: the only ways down that
+# hillside are stairways, and this network already carries them (Pemberton
+# Place and the Vulcan Stairway).  Carrying a rideable road over a staircase
+# is a correctness bug independent of the grade it sampled, so the eastern
+# link is deleted outright rather than re-drawn.
+cla_panorama = free("cla_panorama", -122.457500, 37.754800)
+cla_laguna = free("cla_laguna", -122.457000, 37.749500)
+segments("Clarendon Avenue", "secondary", [
+    [tpb_north, free("cla1", -122.451000, 37.756400),
+     free("cla2", -122.451800, 37.755200)],
+    [free("cla2", -122.451800, 37.755200),
+     free("cla3", -122.453200, 37.754600),
+     free("cla4", -122.455200, 37.754400), cla_panorama],
+    [cla_panorama, free("cla5", -122.458000, 37.752400), cla_laguna],
+])
+polychain("Laguna Honda Boulevard", "secondary", [
+    cla_laguna,
+    free("lh1", -122.456400, 37.747200),
+    free("por2", -122.452000, 37.745600),
 ])
 polychain("Clayton Street", "residential", [
     node("clayton", "carl"),
@@ -805,8 +868,8 @@ way("Pemberton Place", "steps", [cl2, crown], surface="concrete", bicycle="no")
 way("Crown Terrace", "residential", [crown, mkt_corbett])
 polychain("Corbett Avenue", "secondary", [
     mkt_corbett,
-    free("cor1", -122.442600, 37.757000),
-    free("cor2", -122.442800, 37.754000),
+    free("cor1", -122.441900, 37.757100),
+    free("cor2", -122.441900, 37.754200),
     free("cor3", -122.441500, 37.751800),
     burnett_north,
 ], bicycle="yes")
@@ -825,7 +888,8 @@ chain("clipper", "residential", ["castro", "noe", "church", "dolores"])
 # ==========================================================================
 if __name__ == "__main__":
     fc = {"type": "FeatureCollection", "features": FEATS}
-    with open("sf_graph.draft.geojson", "w") as fh:
+    out = Path(__file__).resolve().parent.parent / "data" / "fixtures" / "sf_graph.geojson"
+    with open(out, "w") as fh:
         json.dump(fc, fh, indent=1)
         fh.write("\n")
     print(f"features: {len(FEATS)}")

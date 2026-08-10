@@ -1820,3 +1820,69 @@ Widening any tolerance (rejected). Editing the Corona Heights holdout's wrong co
 graph-geometry ways by membership (rejected in favour of set equality, so the list cannot grow
 silently). "Fixing" the fixture graph's Twin Peaks and Buena Vista geometry (rejected — Task 3's,
 and a reviewer is concurrently in that area).
+
+## Task 3, fix round 6 — grade defects in the fixture graph
+
+**Decided.** Sampling the 258-point fixture DEM along every way exposed six
+streets at physically impossible grades. Four were graph defects and were
+fixed in `scripts/make_fixture_graph_gen.py`; three residuals are DEM
+artefacts and were left alone.
+
+Fixed, with before/after steepest-30 m-window grade:
+
+- **Twin Peaks Boulevard**, 2218 → 3381 m, 57.9% → 31.7%. Revision 1 drew a
+  switchback road as near-straight lines between junctions. A road at half its
+  true length over the same climb reports double the true grade. The hairpins
+  are restored as shape points *inside* each block, so the junction nodes — to
+  which several elevation control points are pinned — did not move.
+- **Clarendon Avenue**, 779 → 1396 m, 49.9% → 25.5%. It ran *east* from Twin
+  Peaks Boulevard to Market x Clayton, across a hillside that carries only the
+  Pemberton Place and Vulcan stairways. Carrying a rideable road over a
+  staircase would route a cyclist up steps while the router believed it was
+  using a street — a correctness bug independent of grade. The eastern link
+  was deleted, not re-drawn; Clarendon now runs west to Laguna Honda through
+  its two sourced control points. `Laguna Honda Boulevard` was added to carry
+  it back to Portola Drive.
+- **Buena Vista Avenue East / West / Avenue.** The ring roads ran 130–200 m
+  *inside* the park, within ~90 m of the sourced 175.3 m summit. Now on the
+  real perimeter, pinned to both sourced park-base points. Buena Vista Avenue
+  was cut back to what it is — the short link from the park's east base to
+  Duboce at Castro — 569 → 188 m, 45.8% → 16.6%.
+- **Upper Market Street**, 60.5% → 45.8%. A shape point bowed Market ~230 m
+  west of its real line into the Twin Peaks hillside; moved onto the straight
+  line between the two sourced nodes.
+
+**Not fixed, and why.** Buena Vista Avenue East (45.0%), West (42.3%) and
+Market Street (45.3%) remain over the 40% ceiling. In each case the
+interpolated surface rises *above both sourced endpoints* of a stretch that
+climbs monotonically in reality — on Market it bulges to 211 m between sourced
+points of 112 m and 172 m. No placement of the road fixes that. Both would be
+resolved by a control point on the unconstrained stretch: one on Buena Vista
+Park's south perimeter, one on upper Market between Clayton and the Twin Peaks
+node. `data/fixtures/elevation_control_points.csv` was deliberately not
+touched. Also examined and left alone: Burnett Avenue (33.2%, genuinely steep
+and below the Filbert yardstick), Corbett Avenue (37.0% after a ~60 m eastward
+correction onto the shelf above Market), and Waller Street, whose 33.6% is an
+RBF overshoot 180 m north of the park summit on a street the control-point
+file itself describes as "the flat street grid at Buena Vista Park's north
+base".
+
+**Two test snapshots updated in the same commit.** `make verify` must be green
+at every commit, and these two tests snapshot the graph, so they cannot move
+in a separate commit without leaving one commit red:
+
+- `test_fixture_dem.py::KNOWN_SCHEMATIC_GEOMETRY_WAYS` shrank from six ways to
+  three. This is a tightening — the test still asserts set *equality*, so a new
+  offender or a stale entry both still fail. The list has never been allowed
+  to grow.
+- `test_elevation_profile.py::_twin_peaks_climb_coords` was re-pointed. Its old
+  tail descended the deleted Clarendon east link, so the hand-picked path
+  literally traversed the fabricated road. The replacement follows the
+  switchbacks and then Clarendon west to Laguna Honda, verified edge-by-edge
+  against the committed graph — exactly the drift the test exists to catch.
+
+Neither change loosens an assertion. **Alternatives rejected:** committing with
+`make verify` red; lengthening roads purely to dilute grade (explicitly out of
+bounds, and unnecessary once the real alignments were restored); and editing
+the control-point CSV to flatten the three disputed residuals, which would have
+hidden a DEM limitation inside the graph.

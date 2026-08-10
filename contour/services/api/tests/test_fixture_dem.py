@@ -462,30 +462,36 @@ STREET_GRADE_CEILING_PCT = 40.0
 # accumulate. Every entry is a fixture-*graph* geometry defect, verified by
 # measuring the distance from the graph's own nodes to sourced control points:
 #
-#   Twin Peaks Boulevard (57.4%)  - the graph's node (-122.4470, 37.7526) lies
-#       48 m from the sourced Twin Peaks south peak (275.5 m), and the whole
-#       polyline covers the Portola-to-Clarendon climb in 1.6 km where the real
-#       switchbacked road takes roughly twice that. Any correct terrain surface
-#       reads steep on it.
-#   Buena Vista Avenue East / West / Avenue (68.7 / 44.0 / 41.4%) - the graph
-#       routes the park's ring roads across the park's own 175 m hill; the
-#       Avenue East node (-122.4403, 37.7692) is 109 m from the summit.
-#   Market Street (51.1%) and Clarendon Avenue (41.4%) - the graph links Twin
-#       Peaks Boulevard east to Market x Clayton. Real Clarendon Avenue runs
-#       *west* to Laguna Honda; the invented link crosses the hillside that in
-#       reality carries only the Pemberton Place and Vulcan stairways, both of
-#       which are present in this same graph as `highway=steps`.
+#   Buena Vista Avenue East (45.0%) / West (42.3%) - the ring roads now sit on
+#       the park perimeter, pinned to both sourced park-base control points
+#       (east 50 m, west 65 m) 230-265 m from the summit. The residual is the
+#       DEM's, not the graph's: there is no control point anywhere on the
+#       park's southern half, so the RBF carries the 175.3 m summit's mass out
+#       to the perimeter and puts the south junction at 151 m where the real
+#       Buena Vista Ave / Park Hill Ave junction is about 105 m.
+#   Market Street (45.3%) - between two sourced control points on Market
+#       itself (Market x Clayton 112 m, "upper Market below Twin Peaks" 172 m,
+#       780 m apart) the surface bulges to 211 m, i.e. 39 m ABOVE the higher
+#       endpoint, on a stretch that climbs monotonically in reality. No lateral
+#       placement helps: at that latitude the DEM reads 241 m at -122.4445 and
+#       still 177 m at -122.4400, 200 m east of Market's real line.
 #
-# These belong to the fixture graph (Task 3), not to the DEM. Recorded in
-# docs/DECISIONS.md "Task 4, fix round 5".
+# Both would be resolved by a control point on the unconstrained stretch - one
+# on Buena Vista Park's south perimeter, one on upper Market between Clayton
+# and the Twin Peaks node.
+#
+# Twin Peaks Boulevard, Clarendon Avenue and Buena Vista Avenue were on this
+# list and have been fixed in the graph (Task 3 revision 3): the Boulevard got
+# its real switchback length back (2218 -> 3381 m, 57.9% -> 31.7%), Clarendon
+# Avenue was re-routed WEST to Laguna Honda and its invented eastern link over
+# the Pemberton Place / Vulcan stairway hillside deleted (49.9% -> 25.5%), and
+# Buena Vista Avenue was cut back to the real link from the park's east base to
+# Duboce (45.8% -> 16.6%). This set shrank; it has never been allowed to grow.
 KNOWN_SCHEMATIC_GEOMETRY_WAYS = frozenset(
     {
-        "Twin Peaks Boulevard",
         "Buena Vista Avenue East",
         "Buena Vista Avenue West",
-        "Buena Vista Avenue",
         "Market Street",
-        "Clarendon Avenue",
     }
 )
 

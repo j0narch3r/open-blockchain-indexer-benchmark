@@ -1,10 +1,10 @@
-# sf_graph.draft.geojson — sourcing notes
+# sf_graph.geojson — sourcing notes
 
 **Files**
 
-- `sf_graph.draft.geojson` — the network (1114 features, 330 KB)
-- `sf_graph.gen.py` — generator (run from this directory; writes the geojson)
-- `sf_graph.validate.py` — validator (`python3 sf_graph.validate.py`)
+- `data/fixtures/sf_graph.geojson` — the network (1113 features, 335 KB)
+- `scripts/make_fixture_graph_gen.py` — generator (writes the geojson in place)
+- `scripts/validate_fixture_graph.py` — validator
 
 ## How the coordinates were derived
 
@@ -356,16 +356,141 @@ in this map's favour.
 11. **25th and 26th Streets** are absent; 24th Street is the network's southern
     boundary in the Mission. That is an extract boundary, not a missing street.
 
+## Revision 3 — grade defects found by DEM sampling
+
+With 258 control points the fixture DEM became sharp enough to sample the
+graph and read grades off it. Six ways sampled at grades that cannot be real.
+Four were graph defects and are fixed; the residuals on three ways are DEM
+artefacts and are disputed below, with evidence.
+
+Diagnostic method: resample each way at 10 m, sample the DEM, and take the
+steepest 30 m window. Filbert between Hyde and Leavenworth — 31.5% real, one
+of the steepest streets in the country — samples at **37.5%** and is the
+yardstick: nothing should exceed it.
+
+### Fixed: Twin Peaks Boulevard was half its real length
+
+Revision 1 drew a switchback road as near-straight lines between junctions.
+A road drawn at half its true length over the same real climb reports double
+the true grade. Restored the hairpins as shape points *inside* each block, so
+the junction nodes — several of which carry pinned elevation control points —
+did not move. **2218 m → 3381 m, 57.9% → 31.7%.**
+
+Still a simplification: the real road is nearer 4.4 km and has more hairpins
+than are drawn. Length was not padded further, because the grade is now
+plausible and inventing hairpins to chase a number is the failure mode this
+round exists to correct.
+
+### Fixed: "Clarendon Avenue" ran across a hillside that has only stairs
+
+This was the serious one, and not because of the grade. Revision 1 ran
+Clarendon Avenue **east** from Twin Peaks Boulevard to Market at Clayton,
+straight across the north shoulder of Twin Peaks. No road crosses there. The
+only ways down that hillside are stairways — Pemberton Place and the Vulcan
+Stairway — both of which this network already carries as `highway=steps`.
+**A rideable road drawn over a staircase will route a cyclist up a flight of
+stairs while the router believes it is using a street.** That is a
+correctness bug in the network, independent of any grade.
+
+The eastern link was deleted outright rather than re-drawn. Clarendon Avenue
+now runs its real course: **west and south-west** from Twin Peaks Boulevard,
+below Sutro Tower, through the sourced Clarendon Ave / Panorama Drive point,
+down to the sourced Laguna Honda Blvd / Clarendon Ave point. **779 m →
+1396 m, 49.9% → 25.5%.** `Laguna Honda Boulevard` was added to carry it back
+to Portola Drive at the Woodside junction, which is real and restores a loop.
+
+The control-point file independently corroborated this before I changed
+anything: the row `Clarendon Ave midway to Market St` carries the comment
+*"this fixture graph link crosses Twin Peaks' north shoulder rather than
+following real Clarendon Ave"*.
+
+### Fixed: the Buena Vista ring road ran over the park, not round it
+
+Buena Vista Avenue East and West were drawn 130–200 m *inside* the park
+boundary, passing within ~90 m of the sourced 175.3 m summit. Both are now on
+the real perimeter, pinned to the two sourced park-base control points (east
+base 50 m, west base 65 m), with their real curved length. `Buena Vista
+Avenue` was corrected to what it actually is — the short link from the park's
+east base up to Duboce Avenue at Castro — rather than a long climb over the
+park's south flank. **East 517 → 690 m; West 562 → 599 m; Buena Vista Avenue
+569 → 188 m (45.8% → 16.6%).**
+
+### Fixed: upper Market Street bowed into the Twin Peaks hillside
+
+The shape point between Market & Clayton and the sourced "below Twin Peaks"
+node sat at −122.4445, bowing Market ~230 m west of its real line into
+terrain Market does not cross. Moved to −122.4427, on the straight line
+between the two sourced nodes. **60.5% → 45.8%** — the residual is disputed
+below.
+
+### Examined and left alone
+
+- **Burnett Avenue (33.2%)** — below the Filbert yardstick, and Burnett is
+  genuinely a steep climb off Portola. The sourced `Burnett Ave near Twin
+  Peaks` point (210 m) sits essentially on the graph's own node and implies
+  this grade. Not a defect.
+- **Corbett Avenue (38.3% → 37.0%)** — nudged ~60 m east onto the shelf above
+  Market, which is where it really runs. Now at the Filbert yardstick. Corbett
+  is a steep street; not pursued further.
+- **Filbert Hyde–Leavenworth (37.5%)** — unchanged. This is the reference.
+
+## Disputed: three residuals that are DEM artefacts, not geometry
+
+In each case the interpolated surface rises *above both sourced endpoints* of
+a stretch that climbs monotonically in reality. No placement of the road fixes
+that, and moving good geometry to chase the number would be the wrong trade.
+
+**1. Upper Market Street, 45.8%.** Market carries two sourced control points:
+Market & Clayton at 112 m and "Upper Market below Twin Peaks" at 172 m, 780 m
+apart. Sampling the straight line between them gives 113 → **211** → 173 m:
+the surface bulges 39 m *above the higher endpoint* in the middle. A street
+that climbs monotonically from Clayton to the top of Market cannot do that.
+Nor is it a lateral-placement problem — at that latitude the DEM reads 241 m
+at −122.4445 and still 177 m at −122.4400, which is 200 m east of Market's
+real line. The bulge is RBF overshoot pulled up by the Twin Peaks control
+points, with nothing constraining the surface along Market itself.
+
+**2. Buena Vista Avenue East 52.1% and West 48.5%.** The ring road is now on
+the park perimeter, pinned to both sourced base points, 230–265 m from the
+summit — the same radius as those bases. Yet the DEM reads 71–151 m along it,
+and puts the park's south junction at **151 m** where the real Buena Vista
+Ave / Park Hill Ave junction is about 105 m. There is no control point
+anywhere on the park's southern half, so the RBF carries the 175.3 m summit's
+mass out to the perimeter. Buena Vista Park really is steep — that is why it
+is a park — but the road is cut into the flank and is nothing like a 50%
+climb.
+
+**3. Waller Street 42.4%** (not on the original list; found by the same scan).
+The block between Central and Lyon samples 62 → **84** → 58 m: an 84 m bump
+between two ~60 m endpoints, 180 m north of the park summit. The sourced row
+`Waller St at Broderick St` is 55 m and its own comment describes this as
+*"the flat street grid at Buena Vista Park's north base"*; the DEM reproduces
+that point exactly at 55.0 m and then overshoots one block west. Waller is a
+straight cardinal street in the Western Addition grid. Nothing to fix here.
+
+If any of these three matter downstream, the fix is a control point on the
+unconstrained stretch — one on Buena Vista Park's south perimeter and one on
+upper Market between Clayton and the Twin Peaks node would resolve all three.
+I did not touch `elevation_control_points.csv`.
+
+### Feature count
+
+1114 → **1113**. Not a trim: two fabricated Clarendon segments were deleted
+and the Buena Vista link shortened to its real extent, while Laguna Honda
+Boulevard, extra Clarendon blocks and the switchback shape points were added.
+The switchbacks are shape points *inside* existing blocks, so they add
+traversal length without inflating the feature count.
+
 ## Validator output
 
 Final accepted run, verbatim from `python3 sf_graph.validate.py`:
 
 ```
-features:            1114
-distinct nodes:      650
-distinct names:      148
-highway histogram:   {'motorway_link': 4, 'path': 7, 'primary': 145, 'residential': 490, 'secondary': 431, 'service': 1, 'steps': 6, 'tertiary': 30}
-connected components: 1  sizes: [650]
+features:            1113
+distinct nodes:      671
+distinct names:      149
+highway histogram:   {'motorway_link': 4, 'path': 7, 'primary': 145, 'residential': 487, 'secondary': 433, 'service': 1, 'steps': 6, 'tertiary': 30}
+connected components: 1  sizes: [671]
 segment length m:    min 10.0  median 178.1  max 791.0
 highway=steps ways:  6
 motorway_link with bicycle=no: 4

@@ -295,25 +295,42 @@ def test_windowed_grades_single_point_is_zero() -> None:
 def _twin_peaks_climb_coords() -> list[LonLat]:
     """A real, connected multi-block path through the fixture graph
     (`data/fixtures/sf_graph.geojson`): Portola Drive up to the base of
-    Twin Peaks Boulevard, over the summit, down Clarendon Avenue —
-    verified connected (each segment's end matches the next segment's
-    start) directly against the committed fixture graph file."""
+    Twin Peaks Boulevard's switchbacks, over the summit, then WEST down
+    Clarendon Avenue to Laguna Honda — verified connected (each segment's
+    end matches the next segment's start) directly against the committed
+    fixture graph file. Updated in Task 3 revision 3: the old tail descended
+    Clarendon Avenue *east* to Market x Clayton, a link that has been deleted
+    because no road crosses that hillside."""
     return [
         (-122.4387, 37.7484),
         (-122.442, 37.7476),
         (-122.4443, 37.7475),
         (-122.447, 37.747),
+        (-122.4448, 37.7475),
+        (-122.446, 37.7483),
         (-122.4472, 37.749),
+        (-122.4445, 37.7494),
+        (-122.4456, 37.7502),
         (-122.4466, 37.7508),
+        (-122.4444, 37.7513),
+        (-122.4448, 37.7523),
         (-122.447, 37.7526),
+        (-122.4452, 37.7533),
         (-122.4468, 37.7541),
         (-122.446, 37.755),
+        (-122.4452, 37.7557),
         (-122.4456, 37.7562),
+        (-122.4452, 37.757),
         (-122.4462, 37.7574),
+        (-122.4488, 37.7574),
         (-122.4514, 37.7574),
-        (-122.449, 37.7584),
-        (-122.446, 37.7588),
-        (-122.4429, 37.759),
+        (-122.451, 37.7564),
+        (-122.4518, 37.7552),
+        (-122.4532, 37.7546),
+        (-122.4552, 37.7544),
+        (-122.4575, 37.7548),
+        (-122.458, 37.7524),
+        (-122.457, 37.7495),
     ]
 
 
