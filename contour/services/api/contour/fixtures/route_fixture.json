@@ -1,0 +1,128 @@
+{
+  "request_id": "fixture-request-0001",
+  "model_version": "effort-v1",
+  "data_manifest": "sha256:fixture0000000000000000000000000000000000000000000000000000ab",
+  "routes": [
+    {
+      "id": "r1",
+      "label": "Gentlest",
+      "geometry": "wpg`gAncnohFod@_jA_q@_cBwj@_cB_q@ooB_jAooBgpA_cB",
+      "distance_m": 4820,
+      "duration_s": 1290,
+      "ascent_m": 22,
+      "descent_m": 41,
+      "max_grade_pct": 4.8,
+      "flat_equivalent_m": 7020,
+      "effort_score": 7020,
+      "grade_segments": [
+        { "start_idx": 0, "end_idx": 2, "grade_pct": 1.2, "class": "flat" },
+        { "start_idx": 2, "end_idx": 4, "grade_pct": 4.8, "class": "gentle" },
+        { "start_idx": 4, "end_idx": 6, "grade_pct": 2.1, "class": "flat" }
+      ],
+      "elevation_profile": [
+        { "dist_m": 0, "ele_m": 19.4 },
+        { "dist_m": 167, "ele_m": 27.4 },
+        { "dist_m": 1067, "ele_m": 19.4 },
+        { "dist_m": 1867, "ele_m": 26.4 },
+        { "dist_m": 3067, "ele_m": 12.4 },
+        { "dist_m": 3867, "ele_m": 19.4 },
+        { "dist_m": 4820, "ele_m": 0.4 }
+      ],
+      "steep_sections": [],
+      "comparison_to_fastest": {
+        "delta_distance_m": 640,
+        "delta_duration_s": 180,
+        "delta_ascent_m": -58
+      },
+      "explanation": "Saves 190 ft of climbing for 0.4 miles and 3 minutes more."
+    },
+    {
+      "id": "r2",
+      "label": "Balanced",
+      "geometry": "wpg`gAncnohFwcAooBo}@ooBo}@ooB_q@_cB_q@ovAwj@_jA",
+      "distance_m": 4460,
+      "duration_s": 1180,
+      "ascent_m": 48,
+      "descent_m": 48,
+      "max_grade_pct": 6.9,
+      "flat_equivalent_m": 10260,
+      "effort_score": 10260,
+      "grade_segments": [
+        { "start_idx": 0, "end_idx": 2, "grade_pct": 2.1, "class": "flat" },
+        { "start_idx": 2, "end_idx": 4, "grade_pct": 6.9, "class": "moderate" },
+        { "start_idx": 4, "end_idx": 6, "grade_pct": 3.4, "class": "gentle" }
+      ],
+      "elevation_profile": [
+        { "dist_m": 0, "ele_m": 19.4 },
+        { "dist_m": 290, "ele_m": 39.4 },
+        { "dist_m": 1090, "ele_m": 21.4 },
+        { "dist_m": 1790, "ele_m": 36.4 },
+        { "dist_m": 2690, "ele_m": 20.4 },
+        { "dist_m": 3540, "ele_m": 33.4 },
+        { "dist_m": 4460, "ele_m": 19.4 }
+      ],
+      "steep_sections": [
+        {
+          "start_dist_m": 0,
+          "end_dist_m": 290,
+          "grade_pct": 6.9,
+          "street": "Steiner St",
+          "ascent_m": 20
+        }
+      ],
+      "comparison_to_fastest": {
+        "delta_distance_m": 280,
+        "delta_duration_s": 70,
+        "delta_ascent_m": -32
+      },
+      "explanation": "Saves 105 ft of climbing for 0.2 miles and 1 minute more."
+    },
+    {
+      "id": "r3",
+      "label": "Fastest",
+      "geometry": "wpg`gAncnohFgiBohCwcAooB_q@ooBwj@_cBwj@ovA_X_q@",
+      "distance_m": 4180,
+      "duration_s": 1110,
+      "ascent_m": 80,
+      "descent_m": 55,
+      "max_grade_pct": 9.4,
+      "flat_equivalent_m": 15930,
+      "effort_score": 15930,
+      "grade_segments": [
+        { "start_idx": 0, "end_idx": 2, "grade_pct": 9.4, "class": "steep" },
+        { "start_idx": 2, "end_idx": 4, "grade_pct": 3.8, "class": "gentle" },
+        { "start_idx": 4, "end_idx": 6, "grade_pct": 2.1, "class": "flat" }
+      ],
+      "elevation_profile": [
+        { "dist_m": 0, "ele_m": 19.4 },
+        { "dist_m": 479, "ele_m": 64.4 },
+        { "dist_m": 1279, "ele_m": 34.4 },
+        { "dist_m": 1979, "ele_m": 54.4 },
+        { "dist_m": 3179, "ele_m": 29.4 },
+        { "dist_m": 4180, "ele_m": 44.4 }
+      ],
+      "steep_sections": [
+        {
+          "start_dist_m": 0,
+          "end_dist_m": 479,
+          "grade_pct": 9.4,
+          "street": "Duboce Ave",
+          "ascent_m": 45
+        }
+      ],
+      "comparison_to_fastest": {
+        "delta_distance_m": 0,
+        "delta_duration_s": 0,
+        "delta_ascent_m": 0
+      },
+      "explanation": "The fastest option — direct, with a real climb along Duboce Ave."
+    }
+  ],
+  "warnings": [
+    {
+      "code": "UNAVOIDABLE_CLIMB",
+      "message": "Every route to this destination climbs at least 72 ft.",
+      "detail": { "min_ascent_m": 22 }
+    }
+  ]
+}

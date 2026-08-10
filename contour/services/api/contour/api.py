@@ -2,13 +2,13 @@
 
 `/v1/health` reports honest (not hardcoded) reachability of dependencies
 that this task does not wire up. `/v1/route` validates the bbox and, for
-now, returns the committed fixture (`tests/fixtures/route_fixture.json`)
-unchanged — Task 15 replaces the fixture body with real routing but must
-not change `RouteResponse`'s shape.
+now, returns the committed fixture (`contour/fixtures/route_fixture.json`,
+loaded as *package data*) unchanged — Task 15 replaces the fixture body
+with real routing but must not change `RouteResponse`'s shape.
 """
 
 import json
-from pathlib import Path
+from importlib import resources
 from typing import Any, Final, Literal
 
 from fastapi import FastAPI, Request
@@ -23,10 +23,11 @@ from contour.types import load_effort_model
 
 app = FastAPI(title="Contour API")
 
-# `contour/api.py` -> parents[1] is `services/api/`.
-_FIXTURE_PATH: Final[Path] = (
-    Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "route_fixture.json"
-)
+# Package data, not a filesystem path relative to `__file__` — that breaks
+# under a zipped/wheel install. `importlib.resources` works regardless of
+# how `contour` is packaged. Single copy: `tests/` reads the same resource
+# (see `tests/conftest.py`) so the API and its tests can never drift apart.
+FIXTURE_RESOURCE: Final = resources.files("contour") / "fixtures" / "route_fixture.json"
 
 # Task resolution #3 (task-3-brief.md): OUT_OF_SERVICE_AREA / INVALID_REQUEST /
 # NO_ROUTE_FOUND / ORIGIN_UNSNAPPABLE -> 422; ENGINE_UNAVAILABLE -> 503.
@@ -74,7 +75,7 @@ def _in_service_area(coord: Coordinate) -> bool:
 
 
 def _load_fixture_response() -> RouteResponse:
-    raw: dict[str, Any] = json.loads(_FIXTURE_PATH.read_text())
+    raw: dict[str, Any] = json.loads(FIXTURE_RESOURCE.read_text())
     return RouteResponse.model_validate(raw)
 
 

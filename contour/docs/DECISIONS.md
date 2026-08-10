@@ -324,3 +324,93 @@ Task 15 is expected to change this when the fixture stops being the response sou
 `engine_reachable`/`dem_readable` true, and a hardcoded-`"ok"` status next to two honest `false`
 fields would be misleading in the same spirit even though the resolution doesn't literally mention
 `status`).
+
+---
+
+## Task 3, fix round 1: three-route fixture; fixture as package data
+
+Coordinator-directed corrections to two of Task 3's own resolutions (plan updated at `ef3d8d0`).
+
+**Decided:** The committed fixture (now `contour/fixtures/route_fixture.json`, see below) has
+**three** routes — `id: r1/r2/r3`, `label: Gentlest/Balanced/Fastest` — instead of one. Values are
+mutually consistent by construction: `ascent_m` (22 / 48 / 80), `distance_m` (4820 / 4460 / 4180),
+`flat_equivalent_m` (7020 / 10260 / 15930), and `effort_score` (same as `flat_equivalent_m`) all
+strictly order Gentlest < Balanced < Fastest, i.e. Gentlest is cheapest in effort and longest in
+distance, Fastest the reverse. `comparison_to_fastest` on every route (including Fastest's own,
+all-zero) is computed as `route.value - fastest.value` for `distance_m`/`duration_s`/`ascent_m`,
+and `explanation` is a plain-English rendering of that same delta (Gentlest keeps the original
+"Saves 190 ft... 0.4 miles... 3 minutes more." from the SPEC.md §6 worked example; Balanced is a
+freshly-computed "Saves 105 ft of climbing for 0.2 miles and 1 minute more."; Fastest, having
+nothing to compare against itself, describes the route instead of a saving). `grade_segments`'
+steepest listed segment equals each route's `max_grade_pct` exactly (Gentlest 4.8 / Balanced 6.9 /
+Fastest 9.4, with grade classes `gentle`/`moderate`/`steep` matching the Global Constraints ramp),
+and each route's `elevation_profile` was constructed leg-by-leg so summed positive/negative
+elevation deltas equal its stated `ascent_m`/`descent_m` (not hysteresis-adjusted — no code in
+this task computes ascent via the peak/valley algorithm design doc §4.4 describes; `effort.py`
+doesn't exist yet — so "coherent" here means the simple sum of rises/falls matches, which is what
+a naive chart-from-points client would show). `steep_sections` only exist on Balanced and Fastest
+(Gentlest's max grade of 4.8% is "gentle," not locally steep, so an empty list is the honest
+answer, not a placeholder). The `UNAVOIDABLE_CLIMB` warning's `detail.min_ascent_m` was corrected
+from the SPEC.md §6 example's `64` to `22` (Gentlest's own ascent, the true minimum across the
+three returned routes) — the original single-route fixture's `64` was left over from copying the
+SPEC example verbatim and was never true of the data it sat next to; the message text now says "72
+ft" (`22 m × 3.28084`) to match.
+**Why:** Coordinator finding — Appendix B ticket M1-04 ("renders fixture polyline + three static
+cards") and SPEC.md §2.2 ("three ranked alternatives... is the MVP's core interaction") establish
+that one route cannot exercise what M1 exists to prove, and Task 20's client tests need three
+cards to render. The internal-consistency work (matching `comparison_to_fastest` arithmetic,
+`grade_segments`/`max_grade_pct` agreement, `elevation_profile` summing to `ascent_m`/`descent_m`,
+and fixing the stale `min_ascent_m: 64`) goes beyond "just add two more routes" because a
+three-route fixture that merely satisfies the JSON Schema but contradicts itself internally (e.g.
+a `steep_sections` entry steeper than the route's own `max_grade_pct`, which the original
+single-route fixture actually had — `9.4` inside a `max_grade_pct: 4.8` route) is exactly the kind
+of "noise" a real client-rendering test would surface as a bug report against Task 20, not Task 3.
+**Verified:** `test_fixture_has_exactly_three_routes_with_expected_labels`,
+`test_gentlest_and_fastest_are_the_extremes`, `test_comparison_to_fastest_is_arithmetically_correct`
+(computes the expected delta independently and compares, plus asserts Fastest's own comparison is
+all zeros), `test_grade_segments_max_matches_route_max_grade_pct`, and
+`test_elevation_profile_rise_and_fall_match_ascent_and_descent` (sums signed deltas and checks
+against `ascent_m`/`descent_m` within `pytest.approx(..., abs=0.5)`) — all five new, all green,
+all reading the committed fixture data itself (not a copy), so they fail immediately if a future
+hand-edit reintroduces drift.
+
+**Decided:** The fixture moved from `services/api/tests/fixtures/route_fixture.json` to
+`services/api/contour/fixtures/route_fixture.json` — inside the installable package — and `api.py`
+now loads it via `importlib.resources.files("contour") / "fixtures" / "route_fixture.json"`
+(module-level `FIXTURE_RESOURCE`, exported) instead of a `Path(__file__).resolve().parents[1] /
+"tests" / ...` filesystem path. `tests/conftest.py` gained a `fixture_data` pytest fixture that
+reads the *same* `contour.api.FIXTURE_RESOURCE`, and every test that previously read the fixture
+off a separate `tests/fixtures/` copy now uses that fixture — there is exactly one copy of
+`route_fixture.json` in the repository. The old `services/api/tests/fixtures/` directory was
+removed (now empty).
+**Why:** Coordinator finding — production code (`api.py`) reading from the test tree works only
+in an editable install and breaks under a built wheel or any real install, since `tests/` is never
+packaged. `importlib.resources` is the standard-library-correct way to read package data
+regardless of how the package is distributed (source tree, wheel, zipped egg); a path relative to
+`__file__` shares the same "breaks when zipped" failure mode `importlib.resources` exists to
+avoid. Pointing tests at the identical resource (rather than duplicating the JSON) means the two
+copies this task started with (and the coordinator's fix explicitly called out as bad — "one
+copy, not two that can drift") no longer exist as two copies to begin with.
+**Verified, not just asserted:** built an actual wheel (`uv build --wheel`) and listed its
+contents — `contour/fixtures/route_fixture.json` (4162 bytes) is present, packaged automatically
+by hatchling's `packages = ["contour"]` wheel target with **no config changes needed**. Then
+installed that wheel into a throwaway venv (no editable install, no source tree on `sys.path`) and
+ran `importlib.resources.files("contour") / "fixtures" / "route_fixture.json"` against it
+directly — it read back the three route labels correctly, proving the resource resolves under a
+real install, not just `uv run` from the repo.
+**Checked, per the coordinator's explicit ask, whether the same packaging gap applies to
+`contour/models/*.json`:** it does not. The same `uv build --wheel` run also packaged
+`contour/models/effort-v1.json` (362 bytes) with zero extra configuration — Task 2's implementer's
+"packaging was unverified" flag (`DECISIONS.md`, Task 2 entry) turns out to have been unfounded:
+hatchling's `packages = ["contour"]` wheel mode includes every file under the package directory,
+code or data, by default, with no `[tool.hatch.build.targets.wheel.force-include]` or artifacts
+config required. No packaging config was changed for either file — there was no gap to close.
+
+**Alternatives rejected:** Keeping the fixture in `tests/` and having `api.py` read it via
+`importlib.resources` anyway by adding `tests/` as a namespace package (rejected — would still
+leave test data as the literal source of a production response, just with extra indirection; the
+coordinator's ask was to move the data, not just change how it's read). Generating the three
+routes' numbers from an actual (if simplified) physics/ranking calculation instead of hand-picked
+mutually-consistent constants (rejected — that calculation is `effort.py`/`ranker.py`'s job
+(Task 11/Task 13), which do not exist yet; hand-picking numbers that satisfy the same *invariants*
+those modules will eventually enforce is the correct scope for a fixture task).
