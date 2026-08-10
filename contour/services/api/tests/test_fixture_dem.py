@@ -35,10 +35,12 @@ from make_fixture_dem import (  # noqa: E402
     NEIGHBORS,
     NODATA,
     SMOOTHING,
+    SUMMIT_HOLDOUT_NAMES,
     ControlPointValidationError,
     build_dem,
     load_control_points,
     run_loo_sweep,
+    sample_and_report_holdouts,
     select_best,
     sha256_of,
 )
@@ -94,11 +96,13 @@ def test_fixture_dem_is_deterministic(tmp_path: Path) -> None:
 
 def test_committed_control_point_csv_validates() -> None:
     points = load_control_points(DEFAULT_CSV_PATH)
-    assert len(points) == 115
     holdouts = [p for p in points if p.role == "holdout"]
     controls = [p for p in points if p.role == "control"]
     assert len(holdouts) == EXPECTED_HOLDOUT_COUNT == 10
-    assert len(controls) == 105
+    # 105 original + 13 added in task-4 fix round 2 (targeted street-scale
+    # relief points — see docs/DECISIONS.md).
+    assert len(controls) == 118
+    assert len(points) == len(holdouts) + len(controls)
     for p in points:
         assert SF_BBOX[0] <= p.lon <= SF_BBOX[2]
         assert SF_BBOX[1] <= p.lat <= SF_BBOX[3]
@@ -221,6 +225,46 @@ def test_interpolation_parameters_match_cv_sweep_winner() -> None:
     winner = select_best(run_loo_sweep(control_points))
     assert winner.smoothing == SMOOTHING
     assert winner.neighbors == NEIGHBORS
+
+
+# ---------------------------------------------------------------------------
+# Holdout accuracy tolerance (task-4 fix round 2) — the coordinator's ruling:
+# +/-12 m for ordinary holdouts (8 of 10), +/-35 m for the two named summit
+# holdouts, which a smooth interpolator with no control point on the true
+# peak will always undershoot regardless of parameter tuning. The summit
+# set is a fixed, named allowlist (`SUMMIT_HOLDOUT_NAMES`), not inferred
+# from which holdouts happen to have the largest error.
+# ---------------------------------------------------------------------------
+
+
+def test_holdout_tolerance_assignment_matches_the_ruling(dem_path: Path) -> None:
+    """Tests the *mechanism*, not the outcome: every named summit holdout
+    gets +/-35 m, every other holdout gets +/-12 m. Whether each holdout's
+    *actual* sampled error currently falls inside that tolerance is
+    reported (not asserted) below — see
+    test_fixture_dem.py's own module docstring note and
+    docs/DECISIONS.md "Task 4, fix round 2" for why this task does not
+    hard-gate the full pass/fail table: after adding real control points
+    for street-scale relief, one additional (non-summit) holdout,
+    Corona Heights summit, now also misses +/-12 m — an honest finding
+    that contradicts the ruling's original "8 of 10 already pass" premise
+    and needs the coordinator's call, not a silent test change to hide it.
+    """
+    results = sample_and_report_holdouts(dem_path)
+    assert len(results) == EXPECTED_HOLDOUT_COUNT
+    for r in results:
+        expected_tolerance = 35.0 if r.name in SUMMIT_HOLDOUT_NAMES else 12.0
+        assert r.tolerance_m == expected_tolerance, r.name
+
+
+def test_summit_holdout_set_is_exactly_two_named_points() -> None:
+    """Pins the named summit allowlist itself — a silent edit here would
+    silently loosen (or tighten) the tolerance ruling without anyone
+    noticing."""
+    assert (
+        frozenset({"Twin Peaks summit (Eureka Peak)", "Bernal Heights summit"})
+        == SUMMIT_HOLDOUT_NAMES
+    )
 
 
 # ---------------------------------------------------------------------------

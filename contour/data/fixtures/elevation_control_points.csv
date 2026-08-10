@@ -114,3 +114,16 @@ Ocean Ave and Phelan Ave,37.724700,-122.452600,40.0,control,estimated from surro
 Hayes St and Steiner St,37.776500,-122.433500,73.0,control,estimated from surrounding terrain,medium
 Fulton St and Scott St,37.776800,-122.437000,68.0,control,estimated from surrounding terrain,medium
 Divisadero St and Grove St,37.774500,-122.437600,65.0,control,estimated from surrounding terrain,medium
+Filbert St and Hyde St,37.800200,-122.419300,96.0,control,derived: comparable to sourced Lombard and Hyde elevation (325 ft) one block north on same ridge; see docs/DECISIONS.md Task 4 fix round 2,low
+Filbert St and Leavenworth St,37.800200,-122.417900,56.4,control,derived: Filbert and Hyde estimate minus 31.5% grade (Lonely Planet/Secret SF) x 412.5 ft sourced block length,medium
+Lombard St and Hyde St (crooked block top),37.801700,-122.419300,99.1,control,multiple travel sources (mikesroadtrip.com roadsideamerica.com) cite 325 ft at crooked block top,medium
+Lombard St and Leavenworth St (crooked block bottom),37.801700,-122.417900,68.6,control,derived: 325 ft top minus widely-cited 100 ft vertical drop over the switchbacks,medium
+Duboce Ave and Church St,37.769500,-122.429100,27.0,control,estimated from surrounding terrain near Duboce/Church rail junction; coordinates from Wikipedia Duboce and Church station,low
+Duboce Ave and Sanchez St,37.769700,-122.430300,29.0,control,estimated from surrounding terrain,low
+Pierce St and Haight St,37.771700,-122.434000,35.0,control,estimated from surrounding terrain: Wiggle corridor gentle climb,low
+Scott St and Fell St,37.772000,-122.437000,42.0,control,estimated from surrounding terrain: Wiggle corridor approaching Panhandle,low
+Buena Vista Ave East at Duboce (park east base),37.769000,-122.438000,50.0,control,estimated from surrounding terrain: park east base,low
+Buena Vista Ave West near Haight (park west base),37.767600,-122.443000,65.0,control,estimated from surrounding terrain: park west base,low
+Corona Heights base (16th St and Flint St),37.762100,-122.438100,91.0,control,base of hill cited ~300 ft (Roadtrippers/Apple Maps aggregation),medium
+Twin Peaks Blvd near Christmas Tree Point,37.756800,-122.446800,260.6,control,SF Standard: ~70 ft below Eureka Peak's 925 ft summit,medium
+Twin Peaks Blvd upper south switchback,37.753800,-122.447800,248.0,control,estimated from surrounding terrain: upper approach to south peak,low

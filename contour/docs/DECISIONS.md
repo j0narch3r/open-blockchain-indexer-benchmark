@@ -723,3 +723,177 @@ Trying additional `neighbors` values beyond `{10, 20, 40}` or `smoothing` values
 round; the coordinator specified this exact grid, "at least" these values, and the four-value
 smoothing tie plus the summit undershoot surviving the winning config are themselves the
 reportable finding, not a reason to keep searching without being asked to).
+
+---
+
+## Task 4, fix round 2: targeted control points for street-scale relief; tolerance ruling
+
+Coordinator ruling and follow-on finding. Two parts: (1) the coordinator's ruling on the ±12 m
+holdout tolerance, encoded as data, not inferred; (2) the substantive fix — the fixture DEM's 105
+control points spread across ~100 km² gave it an *effective* resolution far coarser than its 10 m
+grid, so it could not represent street-scale relief (SPEC §4.1's named failure mode, which SPEC
+itself describes for 30 m SRTM — our fixture DEM, being smoother than SRTM in practice, reproduced
+the exact trap by necessity of the fixtures-only constraint). Mitigated with 13 new, real,
+individually-sourced control points at specific places SF's street-scale relief is known to
+matter.
+
+**Stated plainly, as instructed:** the fixture DEM cannot represent street-scale relief except
+where control points are locally dense. This is not a bug introduced by this task — it is the
+SPEC §4.1 trap ("a router fed a DEM which smears [50-150 m relief] will confidently produce
+routes over hills it can't see") reproduced by the fixtures-only environment constraint, since a
+sparse, city-wide control-point table interpolated with a smooth RBF has no way to know about
+relief between its sample points. The mitigation applied here — targeted control points at known
+steep blocks and low corridors — narrows the trap to wherever nobody has yet added a targeted
+point; it does not close it. **The real remedy is the 3DEP run, which remains an outstanding
+gate** (design doc §2.4).
+
+**Decided (tolerance ruling, encoded as named data):** Added `HOLDOUT_TOLERANCE_M = 12.0`,
+`SUMMIT_HOLDOUT_TOLERANCE_M = 35.0`, and `SUMMIT_HOLDOUT_NAMES = frozenset({"Twin Peaks summit
+(Eureka Peak)", "Bernal Heights summit"})` to `scripts/make_fixture_dem.py`, plus a
+`HoldoutResult`/`sample_and_report_holdouts()` pair that scores each of the 10 holdouts against
+the right tolerance and a `main()` print block reporting the full table on every build.
+`test_summit_holdout_set_is_exactly_two_named_points` pins the named set itself (a silent edit
+there would silently change the ruling without anyone noticing);
+`test_holdout_tolerance_assignment_matches_the_ruling` proves the *mechanism* — every holdout in
+`SUMMIT_HOLDOUT_NAMES` gets 35 m, every other one gets 12 m — deliberately as a mechanism test,
+not a pass/fail gate on the actual sampled errors (see below for why).
+**Why the coordinator's number, not a re-derived one:** their reasoning — "you cannot hit a
+tolerance tighter than the model's demonstrated accuracy," pointing at this task's own measured
+14.43 m median LOO error as the reason ±12 m was never achievable for the hardest points — is a
+conclusion from evidence this task produced, not a new guess; nothing to re-verify independently,
+so it's encoded as given, by name, per their explicit "do not infer 'is a summit' from the data"
+instruction.
+
+**Decided (13 new control points, `role=control`, never `holdout`):** Added, each individually
+sourced with an honest `source`/`confidence` (same standard as the rest of the table — see
+`elevation_control_points.notes.md`'s methodology):
+
+| Point | lat, lon | ele_m | source | confidence |
+|---|---|---:|---|---|
+| Filbert St & Hyde St | 37.8002, -122.4193 | 96.0 | derived: comparable to sourced Lombard & Hyde (325 ft) one block north, same ridge | low |
+| Filbert St & Leavenworth St | 37.8002, -122.4179 | 56.4 | derived: Filbert & Hyde estimate minus 31.5% grade (Lonely Planet/Secret SF) x 412.5 ft sourced block length | medium |
+| Lombard St & Hyde St (crooked block top) | 37.8017, -122.4193 | 99.1 | multiple travel sources (mikesroadtrip.com, roadsideamerica.com): 325 ft at crooked block top | medium |
+| Lombard St & Leavenworth St (crooked block bottom) | 37.8017, -122.4179 | 68.6 | derived: 325 ft top minus widely-cited 100 ft vertical drop over the switchbacks | medium |
+| Duboce Ave & Church St | 37.7695, -122.4291 | 27.0 | estimated from surrounding terrain; coordinates from Wikipedia "Duboce and Church station" | low |
+| Duboce Ave & Sanchez St | 37.7697, -122.4303 | 29.0 | estimated from surrounding terrain | low |
+| Pierce St & Haight St | 37.7717, -122.4340 | 35.0 | estimated from surrounding terrain: Wiggle corridor gentle climb | low |
+| Scott St & Fell St | 37.7720, -122.4370 | 42.0 | estimated from surrounding terrain: Wiggle corridor approaching Panhandle | low |
+| Buena Vista Ave East at Duboce (park east base) | 37.7690, -122.4380 | 50.0 | estimated from surrounding terrain: park east base | low |
+| Buena Vista Ave West near Haight (park west base) | 37.7676, -122.4430 | 65.0 | estimated from surrounding terrain: park west base | low |
+| Corona Heights base (16th St & Flint St) | 37.7621, -122.4381 | 91.0 | base of hill cited ~300 ft (Roadtrippers/Apple Maps aggregation) | medium |
+| Twin Peaks Blvd near Christmas Tree Point | 37.7568, -122.4468 | 260.6 | SF Standard: ~70 ft below Eureka Peak's 925 ft summit | medium |
+| Twin Peaks Blvd upper south switchback | 37.7538, -122.4478 | 248.0 | estimated from surrounding terrain: upper approach to south peak | low |
+
+**Skipped Steiner & Waller** from the coordinator's list — it already exists as a control point
+(`Wiggle corridor floor (Waller and Steiner)`, 28.0 m, `estimated from surrounding terrain`,
+`low`, committed in Task 4's original pass). Adding a second row at or near the same coordinates
+would either duplicate it (failing the CSV's own duplicate-coordinate check) or place a
+near-duplicate a few metres away for no reason.
+
+**Sourcing method for the well-cited pair (Filbert/Lombard):** Lombard Street's crooked block
+(Hyde-Leavenworth) is independently and consistently cited across multiple travel sources at 325
+ft elevation at its top, with a widely-cited 100 ft vertical drop over the switchback descent —
+used as-is (Hyde end 325 ft = 99.1 m, Leavenworth end 225 ft = 68.6 m). Filbert Street's 31.5%
+grade over the same Hyde-Leavenworth block (412.5 ft straight-line, matching Lombard's own cited
+block length one block south on the same ridge) is independently, consistently cited (Lonely
+Planet, Secret SF, and others agree on 31.5%, tied SF's steepest). No independent citable absolute
+elevation was found for Filbert & Hyde specifically (ordinary street corners rarely have a
+surveyed spot elevation, same limitation the original notes.md describes for most of the table);
+it was estimated as comparable to the sourced Lombard & Hyde point one block north on the same
+ridge crest (confidence: low, honestly, not dressed up as more certain than it is), and Filbert &
+Leavenworth was then *derived* from that estimate using the independently-sourced 31.5% grade fact
+(confidence: medium, since the *delta* is well-sourced even though the absolute anchor isn't).
+Coordinates for Filbert & Hyde were cross-checked against an independent web search result
+(37.800208, -122.419334) that landed within ~50 m of a hand-computed estimate (using Vallejo &
+Jones' committed 37.7998,-122.4177 anchor, Lombard's own cited 412.5 ft block width converted to
+degrees at this latitude, and standard SF block-count reasoning) — the two independent methods
+agreeing to within one grid cell's width was treated as adequate corroboration for placement
+(not for the elevation values, which come from the citations above).
+**Verified — not asserted — that this closes the geometric trap:** sampled the finished DEM at
+Filbert & Hyde (37.8002, -122.4193) and Filbert & Leavenworth (37.8002, -122.4179) before and
+after this fix. **Before** (105-point CSV, committed at `efa5a6a`): Hyde = 92.9 m, Leavenworth =
+100.6 m — the DEM showed this block **sloping the wrong way** (-6.3% — Leavenworth reading
+*higher* than Hyde), not merely "gentle," because no control point anywhere near it said
+otherwise. **After** (118-point CSV): Hyde = 95.1 m, Leavenworth = 57.2 m, a **30.8% grade** over
+the same 123 m — matching the real, cited 31.5% to within the RBF's own smoothing (the raster
+samples 10 m off the exact control-point coordinates, so exact reproduction of the control values
+was never expected). This is direct, measured proof that a targeted control point changes what the
+DEM can represent at a specific place, not an assumption.
+
+**Decided:** Re-ran `run_loo_sweep`/`select_best` (`scripts/cv_sweep.py`) against the expanded
+118-point control set. Same winner as the 105-point sweep:
+
+| smoothing | neighbors | median LOO error (m) | p90 LOO error (m) |
+|---:|---:|---:|---:|
+| 0.0 | global | 15.21 | 97.58 |
+| 0.0 | 10 | 16.79 | 97.14 |
+| 0.0 | 20 | 13.80 | 92.24 |
+| 0.0 | 40 | 14.66 | 97.88 |
+| 0.1 | global | 15.21 | 97.58 |
+| 0.1 | 10 | 16.79 | 97.14 |
+| 0.1 | 20 | 13.80 | 92.24 |
+| 0.1 | 40 | 14.66 | 97.88 |
+| 0.5 | global | 15.21 | 97.58 |
+| 0.5 | 10 | 16.79 | 97.14 |
+| 0.5 | 20 | 13.80 | 92.24 |
+| 0.5 | 40 | 14.66 | 97.88 |
+| 2.0 | global | 15.21 | 97.58 |
+| 2.0 | 10 | 16.78 | 97.14 |
+| **2.0** | **20** | **13.80** | **92.24** |
+| 2.0 | 40 | 14.66 | 97.88 |
+
+**Winner: `smoothing=2.0, neighbors=20`, unchanged.** Median LOO error improved slightly (14.43 m
+→ 13.80 m) with 13 more control points; the near-tie among smoothing values persists (at
+`neighbors=20`, the four smoothing values now differ by a few thousandths of a metre — see raw
+values in this task's report — floating-point noise, same finding as fix round 1, now confirmed a
+second time at a different point count). No code change needed —
+`test_interpolation_parameters_match_cv_sweep_winner` re-verified this against the live CSV rather
+than assumed it.
+
+**Reported (in-hull clamping, resolution #3 follow-up):** in-hull clamped pixels fell from 74,368
+of 970,057 (7.67%, fix round 1's config) to **71,746 of 970,057 (7.40%)** — a small improvement,
+plausibly because 13 more real control points densify and better-condition the convex hull the
+"in-hull" test is measured against, rather than because of any parameter change (parameters are
+unchanged). Total clamped pixels also fell, 42.27% → **39.77%** (more of the bbox now falls
+inside a denser hull, so less of it is "no nearby data, extrapolate toward sea level").
+
+**Important honest finding — NOT quietly resolved, flagged for the coordinator:** adding the 13
+new points changed which holdouts pass the ±12 m tolerance. **Twin Peaks summit's error improved
+substantially** (-33.0 m → **-20.5 m**) because the new Twin Peaks Blvd/Christmas Tree Point
+control point (260.6 m) is now in its local `neighbors=20` neighborhood — comfortably within the
+new ±35 m summit tolerance. Bernal Heights is unchanged (-21.0 m, still within ±35 m; no new
+points were added near it). **But Corona Heights summit — not a named summit exception, currently
+gated at ±12 m — regressed from -5.9 m to -39.1 m, and Fort Mason regressed from -11.7 m to
+-13.6 m** (a small miss, just over the line). Investigated the mechanism, not just observed it: a
+nearest-neighbor check at the time of writing shows three of the new points (`Buena Vista Ave West
+near Haight` 65 m, `Buena Vista Ave East at Duboce` 50 m, `Corona Heights base` 91 m) now fall
+within Corona Heights summit's 20 nearest control points, displacing higher points (`Tank Hill`
+198 m, `Burnett Ave near Twin Peaks` 210 m) that used to be in that neighborhood — with
+`neighbors=20`'s local fit, three new nearby *low* points can out-vote the higher ones that used
+to carry the local estimate, even though the total control-point count only went up. This is a
+real property of local RBF interpolation, not a data error: the added points are real, sourced,
+and reasonably placed (Corona Heights base's placement was cross-checked in the same manner as
+Filbert & Hyde above). **Not fixed here.** Per the coordinator's explicit instruction — "do not
+adjust any value to produce a particular outcome" — neither the new points nor the LOO-selected
+parameters were altered to make this pass; the gating test
+(`test_holdout_tolerance_assignment_matches_the_ruling`) was scoped to check tolerance
+*assignment* correctness rather than hard-fail on the current pass/fail table, specifically so
+this finding could surface honestly instead of being hidden by either loosening a test or reverting
+real data. **This needs the coordinator's call**: whether Corona Heights summit should join the
+named summit exception set (it is, after all, also a holdout summit with no control point at its
+true peak — the same structural reason Twin Peaks and Bernal Heights get ±35 m), whether
+`neighbors=20`'s sensitivity to local point density is itself a reason to revisit the winning
+config despite the LOO sweep, or something else. Not decided unilaterally here.
+
+**Alternatives rejected:** Repositioning or removing the three points that caused the Corona
+Heights regression (rejected — would be "adjusting a value to produce a particular outcome,"
+exactly what was ruled out; the points are real, sourced, and reasonably placed). Adding Corona
+Heights to `SUMMIT_HOLDOUT_NAMES` unilaterally (rejected — the coordinator's instruction named
+exactly two summits and said not to infer the set from the data; expanding it myself the moment a
+third holdout became inconvenient would be exactly that). Hard-gating
+`test_holdout_tolerance_assignment_matches_the_ruling` on all 10 holdouts passing (rejected — would
+either force a red `make verify` against a hard global constraint, or force a same-session
+loosening of a test not yet committed to hide a real finding; scoped the test to the tolerance
+*mechanism* instead and reported the actual numbers here and in the task report for a human
+decision). Re-tuning `neighbors` specifically to fix Corona Heights (rejected — would defeat the
+entire point of selecting parameters by LOO cross-validation rather than by outcome).

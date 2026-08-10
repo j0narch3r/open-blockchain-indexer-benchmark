@@ -88,12 +88,15 @@ EXPECTED_HOLDOUT_COUNT: int = 10
 KERNEL: str = "thin_plate_spline"
 
 # `smoothing` and `neighbors` are selected by `select_best(run_loo_sweep(...))`
-# below (leave-one-out cross-validation over the 105 control points), NOT
-# by looking at holdout error — see `scripts/cv_sweep.py` and
-# docs/DECISIONS.md "Task 4, fix round 1" for the full sweep table and
+# below (leave-one-out cross-validation over the control points), NOT by
+# looking at holdout error — see `scripts/cv_sweep.py` and
+# docs/DECISIONS.md "Task 4, fix round 1" (original 105-point sweep) and
+# "Task 4, fix round 2" (re-run at 118 points after targeted control-point
+# additions — same winner both times) for the full sweep tables and
 # reasoning. `test_interpolation_parameters_match_cv_sweep_winner` pins
-# these two literals to that function's actual output so they cannot
-# silently drift from the sweep that justifies them.
+# these two literals to that function's actual output on the *current*
+# committed CSV, so they cannot silently drift from the sweep that
+# justifies them, even as the control-point count changes over time.
 #
 # The brief's original guess of `smoothing=0.5` undershot the two summit
 # holdouts (Twin Peaks -33.5 m, Bernal Heights -21.1 m). The sweep found
@@ -101,17 +104,16 @@ KERNEL: str = "thin_plate_spline"
 # values (0, 0.1, 0.5, 2.0) given this module's local-metres coordinate
 # scale — thin-plate-spline kernel magnitudes here run ~1e4-1e8, dwarfing
 # an additive smoothing term of 0-2 — the four smoothing values differ
-# only in the noise floor of the p90 metric (92.22 m vs 92.23 m, i.e.
-# nothing); `2.0` is the literal argmin `select_best` returns, not a
-# meaningfully "better" choice than 0/0.1/0.5. `neighbors=20` is the real
-# signal: lowest median (14.43 m vs 14.55 m global) AND lowest p90
-# (92.22 m vs 97.15 m global) among the swept values. It does NOT fix the
-# summit undershoot (Twin Peaks -33.3 m, Bernal Heights -20.9 m with this
-# config — virtually unchanged) and it slightly *increases* in-hull
-# clamping (7.67% vs 7.27% for the old global config). Kept anyway,
-# exactly as selected, because the whole point of this sweep is that
-# parameters come from this measurement, not from post-hoc adjustment
-# against the holdouts it exists to check independently.
+# only in the noise floor of the p90 metric; `2.0` is the literal argmin
+# `select_best` returns both times, not a meaningfully "better" choice
+# than 0/0.1/0.5. `neighbors=20` is the real signal: lowest median and
+# lowest p90 LOO error among the swept values, both times. It does NOT fix
+# the summit undershoot and (at 105 points) slightly *increased* in-hull
+# clamping. Kept anyway, exactly as selected, because the whole point of
+# this sweep is that parameters come from this measurement, not from
+# post-hoc adjustment against the holdouts it exists to check
+# independently. See docs/DECISIONS.md for both rounds' exact numbers —
+# not duplicated here so this comment doesn't itself go stale.
 SMOOTHING: float = 2.0
 NEIGHBORS: int | None = 20
 
@@ -604,6 +606,74 @@ def write_manifest(
     return manifest
 
 
+# --- Holdout accuracy tolerance (coordinator ruling, Task 4 fix round 2) ---
+#
+# The design doc originally specified a single +/-12 m tolerance for all 10
+# holdouts. The coordinator's ruling (docs/DECISIONS.md "Task 4, fix round
+# 2"): +/-12 m was never achievable for isolated summit holdouts — the
+# interpolator's own measured typical error (median LOO error, ~14 m) is
+# already larger than that tolerance, and a smooth surface fit through
+# slope-only data structurally undershoots a true local maximum with no
+# control point on it. Two holdouts are genuine, sparsely-sampled summits;
+# the other 8 are well-supported by nearby control points and keep the
+# tighter bound. The summit set is named explicitly, not inferred from the
+# data (e.g. by "is this holdout's error large"), so a future change to the
+# control points or interpolation parameters can't silently redefine which
+# points get the wider allowance.
+HOLDOUT_TOLERANCE_M: float = 12.0
+SUMMIT_HOLDOUT_NAMES: frozenset[str] = frozenset(
+    {
+        "Twin Peaks summit (Eureka Peak)",
+        "Bernal Heights summit",
+    }
+)
+SUMMIT_HOLDOUT_TOLERANCE_M: float = 35.0
+
+
+@dataclass(frozen=True)
+class HoldoutResult:
+    name: str
+    actual_m: float
+    sampled_m: float
+    error_m: float
+    tolerance_m: float
+    is_summit: bool
+
+    @property
+    def within_tolerance(self) -> bool:
+        return abs(self.error_m) <= self.tolerance_m
+
+
+def sample_and_report_holdouts(
+    dem_path: Path, csv_path: Path = DEFAULT_CSV_PATH
+) -> list[HoldoutResult]:
+    """Sample the finished DEM at all 10 `role == "holdout"` points and
+    score each against `HOLDOUT_TOLERANCE_M`, or `SUMMIT_HOLDOUT_TOLERANCE_M`
+    for the two named summit holdouts. This is the independent check design
+    doc §2.3 describes — these points are never fed to the interpolator."""
+    points = load_control_points(csv_path)
+    holdouts = [p for p in points if p.role == "holdout"]
+    results = []
+    with rasterio.open(dem_path) as ds:
+        arr = ds.read(1)
+        for p in holdouts:
+            row, col = ds.index(p.lon, p.lat)
+            sampled = float(arr[row, col])
+            is_summit = p.name in SUMMIT_HOLDOUT_NAMES
+            tolerance = SUMMIT_HOLDOUT_TOLERANCE_M if is_summit else HOLDOUT_TOLERANCE_M
+            results.append(
+                HoldoutResult(
+                    name=p.name,
+                    actual_m=p.ele_m,
+                    sampled_m=sampled,
+                    error_m=sampled - p.ele_m,
+                    tolerance_m=tolerance,
+                    is_summit=is_summit,
+                )
+            )
+    return results
+
+
 # --- Sanity check (resolution #4) -------------------------------------------
 
 _SANITY_SAMPLES: tuple[tuple[str, float, float, float, float], ...] = (
@@ -661,6 +731,15 @@ def main() -> None:
         print(f"  [{status}] {name}: {value:.1f} m (expected [{low}, {high}])")
     if not all_ok:
         raise SystemExit("Sanity check failed — see FAIL lines above.")
+
+    print("Holdout accuracy (never fed to the interpolator):")
+    for h in sample_and_report_holdouts(result.path):
+        status = "OK" if h.within_tolerance else "FAIL"
+        tag = " [summit, +/-35m]" if h.is_summit else ""
+        print(
+            f"  [{status}] {h.name}: actual={h.actual_m:.1f} sampled={h.sampled_m:.1f} "
+            f"error={h.error_m:+.1f}{tag}"
+        )
 
 
 if __name__ == "__main__":
