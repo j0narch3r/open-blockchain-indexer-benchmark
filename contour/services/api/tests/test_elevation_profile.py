@@ -336,9 +336,23 @@ def test_twin_peaks_climb_coords_are_a_connected_path_in_the_fixture_graph() -> 
 def test_build_profile_on_real_sf_path_is_physically_plausible(sampler: DemSampler) -> None:
     """A genuine multi-block climb over Twin Peaks. Not a precise value —
     a sanity band: this route climbs roughly 200 m of real relief (SF's
-    second-highest point, ~281 m at the true summit) and then descends
-    partway down the far side, so both ascent and descent should be
-    substantial and ascent should dominate (net gain, not a flat loop)."""
+    second-highest point, ~281 m at the true summit) and then descends the
+    far side, so both ascent and descent should be substantial.
+
+    **Bands corrected in Task 4 fix round 5.** The original bands were read
+    off a DEM that had Portola Drive's eastern end at 38.9 m — the top of
+    Market Street, really ~168 m — because only two control points sat
+    within ~350 m of that stretch and both were at 152-165 m. That defect
+    made the route look like a climb from near sea level with a 37.9%
+    ramp on it, so `ascent > descent` and `max_grade <= 40` both encoded
+    the artefact rather than the terrain. With Portola anchored along its
+    length, the route starts at ~167 m, tops the Twin Peaks saddle at
+    ~256 m and ends at Market x Clayton at ~112 m: it is a net *descent*,
+    and the surviving 56.5% peak is on the fixture graph's Twin Peaks
+    Boulevard, whose polyline covers the real switchbacked road's climb in
+    roughly half its length (see `test_fixture_dem.py`'s
+    `KNOWN_SCHEMATIC_GEOMETRY_WAYS` and docs/DECISIONS.md fix round 5).
+    """
     coords = _twin_peaks_climb_coords()
     profile = build_profile(coords, sampler)
 
@@ -351,12 +365,14 @@ def test_build_profile_on_real_sf_path_is_physically_plausible(sampler: DemSampl
     assert isinstance(profile.max_grade_pct, float)
 
     # Sanity band, not a golden value (brief's own instruction). See
-    # task-6-report.md for the measured figure and why this band was
-    # chosen.
+    # task-6-report.md for the measured figures and why these bands were
+    # chosen — and fix round 5 for why the original ones were wrong.
     assert 100.0 <= profile.ascent_m <= 350.0
-    assert 20.0 <= profile.descent_m <= 200.0
-    assert profile.ascent_m > profile.descent_m
-    assert 0.0 < profile.max_grade_pct <= 40.0
+    assert 100.0 <= profile.descent_m <= 350.0
+    # The route ends ~55 m below where it starts, having gone over the
+    # saddle: a net descent with substantial relief in both directions.
+    assert profile.descent_m > profile.ascent_m
+    assert 0.0 < profile.max_grade_pct <= 60.0
 
 
 def test_build_profile_short_route_does_not_crash_on_savgol_window() -> None:

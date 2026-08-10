@@ -12,10 +12,10 @@ Candlestick Point,37.718100,-122.380200,4.0,holdout,topozone/USGS,medium
 Twin Peaks south peak (Noe),37.752200,-122.446800,275.5,control,Wikipedia,high
 Twin Peaks Blvd switchback west,37.756800,-122.450100,230.0,control,estimated from surrounding terrain,low
 Twin Peaks Blvd Clarendon curve,37.758000,-122.451500,200.0,control,estimated from surrounding terrain,low
-Burnett Ave near Twin Peaks,37.758000,-122.446000,210.0,control,estimated from surrounding terrain,low
+Burnett Ave near Twin Peaks,37.749500,-122.443000,210.0,control,estimated from surrounding terrain; coordinate corrected in fix round 5 - the original was 800 m north of any Burnett Avenue node in the fixture graph and sat on Twin Peaks Blvd's north loop instead,low
 Mount Davidson summit,37.738500,-122.453000,282.9,control,Wikipedia,high
 Mount Sutro summit,37.757500,-122.453100,276.8,control,Wikipedia (sources vary 908-912 ft),medium
-Buena Vista Park summit,37.769000,-122.440200,175.3,control,Wikipedia,medium
+Buena Vista Park summit,37.768300,-122.440800,175.3,control,Wikipedia (575 ft peak); coordinate corrected in fix round 5 to Wikipedia's own park coordinate - the previous position was 94 m northeast of it and put a 175 m peak 70 m from Waller St and 24 m from the fixture graph's Buena Vista Ave East ring road,medium
 Museum Way and Roosevelt Way,37.764800,-122.439000,130.0,control,estimated from surrounding terrain,low
 States St and Corbett Ave,37.762500,-122.443700,110.0,control,estimated from surrounding terrain,low
 Roosevelt Way and 14th St,37.763800,-122.438600,120.0,control,estimated from surrounding terrain,low
@@ -24,7 +24,7 @@ Bernal Heights Blvd south side,37.737500,-122.416500,110.0,control,estimated fro
 Coleridge St and Elsie St,37.742000,-122.417300,70.0,control,estimated from surrounding terrain,low
 Potrero Hill high point,37.760500,-122.400800,95.7,control,topozone/USGS,medium
 Nob Hill summit (California and Mason),37.791900,-122.411600,103.9,control,topozone (sources vary 338-351 ft),medium
-Russian Hill summit (Vallejo and Jones),37.799800,-122.417700,102.1,control,USGS/topozone,medium
+Russian Hill summit (Vallejo and Jones),37.798200,-122.415400,102.1,control,USGS/topozone; coordinate corrected in fix round 5 - it was 270 m NW of the Vallejo/Jones intersection it names and 48 m from the Filbert/Leavenworth row (elevation unchanged; position derived from the fixture graph's own Jones St and Broadway nodes),medium
 Telegraph Hill (Pioneer Park),37.802400,-122.405800,83.8,control,Wikipedia (sources vary 274-285 ft),medium
 Rincon Hill historic summit,37.787300,-122.392500,30.5,control,Wikipedia (heavily graded and altered; historic estimate),low
 Lone Mountain summit,37.777200,-122.452600,128.3,control,Wikipedia,medium
@@ -96,7 +96,7 @@ Lake Merced south end (Skyline Blvd),37.719600,-122.493400,8.0,control,estimated
 Islais Creek Channel (3rd St bridge),37.742300,-122.387900,3.0,control,estimated from surrounding terrain,medium
 Duboce Ave and Market St (Duboce Triangle),37.769900,-122.430800,30.0,control,estimated from surrounding terrain,low
 Wiggle corridor floor (Waller and Steiner),37.771200,-122.432600,28.0,control,estimated from surrounding terrain,low
-Panhandle (Oak St and Baker St),37.771600,-122.443700,24.0,control,estimated from surrounding terrain,low
+Panhandle (Oak St and Baker St),37.772664,-122.440772,28.0,control,estimated from surrounding terrain; coordinate corrected in fix round 5 to the fixture graph's own Oak St x Baker St node - the original was 280 m west of the intersection it names and its 24 m value was pulling the Panhandle's mid-block ground below the real grade,low
 Glen Canyon Park floor (Elk St entrance),37.744900,-122.439600,68.6,control,sfrecpark.org / topozone,medium
 Portola Drive saddle (near O'Shaughnessy Blvd),37.744700,-122.444100,152.4,control,estimated from surrounding terrain,low
 Alemany gap / Bernal Cut floor (San Jose Ave and 30th St),37.739500,-122.423000,30.0,control,estimated from surrounding terrain,low
@@ -161,11 +161,11 @@ Midtown Terrace (Olympia Way and Marview Way),37.751500,-122.453500,210.0,contro
 Laguna Honda Blvd and Clarendon Ave,37.749500,-122.457000,128.0,control,estimated from surrounding terrain,low
 Laguna Honda Reservoir,37.747000,-122.454500,112.0,control,estimated from surrounding terrain,low
 Portola Dr and Woodside Ave,37.743000,-122.453000,110.0,control,estimated from surrounding terrain,low
-Portola Dr and Twin Peaks Blvd,37.746500,-122.445500,165.0,control,estimated from surrounding terrain,low
+Portola Dr and Twin Peaks Blvd,37.746500,-122.445500,148.0,control,estimated from surrounding terrain,low
 Forest Hill station (Laguna Honda Blvd and Dewey Blvd),37.747000,-122.466500,108.0,control,estimated from surrounding terrain,low
 West Portal (Ulloa St and West Portal Ave),37.740200,-122.468000,72.0,control,estimated from surrounding terrain,low
 Edgehill Mountain summit,37.742000,-122.464000,223.7,control,Wikipedia: Edgehill Mountain 734 ft (224 m),medium
-Miraloma Park (Portola Dr and Fowler Ave),37.739500,-122.452000,158.0,control,estimated from surrounding terrain,low
+Miraloma Park (Marietta Dr and Bella Vista Way),37.736800,-122.450500,150.0,control,estimated from surrounding terrain: Miraloma Park's residential shelf on Mount Davidson's southeast flank; relocated in fix round 5 - the fix-round-4 coordinate was 680 m off Portola Drive and only 142 m from the Mount Davidson summit row,low
 Mount Olympus (Upper Terrace),37.758000,-122.440700,168.6,control,Wikipedia: Mount Olympus San Francisco 553 ft (169 m),medium
 Taraval St and 19th Ave,37.742500,-122.477000,26.0,control,estimated from surrounding terrain,low
 Taraval St and 30th Ave,37.742500,-122.488500,20.0,control,estimated from surrounding terrain,low
@@ -225,3 +225,45 @@ Bay St and Van Ness Ave,37.804500,-122.423500,6.0,control,estimated from surroun
 Geary Blvd and 20th Ave,37.780500,-122.479000,42.0,control,estimated from surrounding terrain: between the sourced Geary/Park Presidio and Balboa/25th Ave rows,low
 Golden Gate strait open water west of the bridge (anchor),37.820000,-122.485000,0.0,control,sea level by definition,high
 SF Bay open water off Fort Point (anchor),37.825000,-122.460000,0.0,control,sea level by definition,high
+Portola Dr at Market St (fixture graph node),37.748400,-122.438700,168.0,control,real top-of-Market elevation placed at the fixture graph's own Portola Drive node; the graph's Portola line is a simplified geometry offset 150-250 m north of the real street,low
+Portola Dr east of O'Shaughnessy (fixture graph node),37.747600,-122.442000,158.0,control,estimated from surrounding terrain; interpolated between the top of Market and the sourced Portola/O'Shaughnessy saddle,low
+Portola Dr at Burnett Ave (fixture graph node),37.747500,-122.444300,152.0,control,matches the existing Portola Drive saddle row 311 m south; placed at the fixture graph's node,low
+Portola Dr at Twin Peaks Blvd (fixture graph node),37.747000,-122.447000,143.0,control,estimated from surrounding terrain; consistent with the existing Portola Dr and Twin Peaks Blvd row 141 m southeast,low
+Portola Dr midway to Woodside Ave,37.746300,-122.449500,128.0,control,estimated from surrounding terrain: even grade between the Twin Peaks Blvd junction and Woodside Ave,low
+Portola Dr at Woodside Ave (fixture graph node),37.745600,-122.452000,112.0,control,estimated from surrounding terrain; consistent with the existing Portola Dr and Woodside Ave row 300 m south,low
+Portola Dr midway to St Francis Circle,37.744800,-122.454500,98.0,control,estimated from surrounding terrain: even grade on the descent to West Portal,low
+Portola Dr near St Francis Circle (fixture graph node),37.744000,-122.457000,85.0,control,estimated from surrounding terrain,low
+Grand View Ave at Clipper St,37.749000,-122.440100,148.0,control,estimated from surrounding terrain: the Diamond Heights/Twin Peaks east shelf,low
+Corbett Ave at Grand View Ave and Burnett Ave,37.750800,-122.440500,152.0,control,estimated from surrounding terrain,low
+Burnett Ave at Corbett Ave,37.750000,-122.441500,175.0,control,estimated from surrounding terrain,low
+Corbett Ave north of Grand View Ave,37.751800,-122.441500,160.0,control,estimated from surrounding terrain,low
+Upper Market St below Twin Peaks (fixture graph node),37.752000,-122.442500,172.0,control,estimated from surrounding terrain: Twin Peaks east slope below the sourced south peak,low
+Waller St at Broderick St,37.769809,-122.438636,55.0,control,estimated from surrounding terrain: the flat street grid at Buena Vista Park's north base; coordinates are the fixture graph's own intersection node,low
+Waller St at Baker St,37.769631,-122.440234,58.0,control,estimated from surrounding terrain; coordinates are the fixture graph's own intersection node,low
+Waller St at Central Ave,37.769275,-122.443430,62.0,control,estimated from surrounding terrain; coordinates are the fixture graph's own intersection node,low
+Waller St at Ashbury St,37.768919,-122.446626,68.0,control,estimated from surrounding terrain; coordinates are the fixture graph's own intersection node,low
+Haight St at Broderick St,37.770790,-122.438810,52.0,control,estimated from surrounding terrain; between the existing Divisadero/Haight and Ashbury/Haight rows,low
+Haight St at Baker St,37.770612,-122.440408,52.0,control,estimated from surrounding terrain; coordinates are the fixture graph's own intersection node,low
+Haight St at Central Ave,37.770256,-122.443604,58.0,control,estimated from surrounding terrain; coordinates are the fixture graph's own intersection node,low
+Page St at Baker St,37.771638,-122.440590,42.0,control,estimated from surrounding terrain: one block down toward the Panhandle,low
+Page St at Masonic Ave,37.771104,-122.445384,52.0,control,estimated from surrounding terrain,low
+Frederick St at Masonic Ave,37.766857,-122.444631,78.0,control,estimated from surrounding terrain: Buena Vista Park's southwest base,low
+Jones St at Filbert St,37.800667,-122.415841,42.0,control,estimated from surrounding terrain: Filbert continues descending east of Leavenworth; coordinates are the fixture graph's own intersection node,low
+Leavenworth St at Broadway,37.797221,-122.416641,78.0,control,estimated from surrounding terrain: Russian Hill's south slope; coordinates are the fixture graph's own intersection node,low
+Twin Peaks Blvd south approach (fixture graph node),37.749000,-122.447200,170.0,control,estimated from surrounding terrain: even climb from the Portola junction,low
+Twin Peaks Blvd below the east switchbacks (fixture graph node),37.750800,-122.446600,205.0,control,estimated from surrounding terrain: 156 m below the sourced Twin Peaks south peak,low
+Twin Peaks Blvd east switchback lower (fixture graph node),37.752600,-122.447000,262.0,control,estimated from surrounding terrain: this fixture graph node lies 48 m from the sourced Twin Peaks south peak (275.5 m) so it is just below the peak - see docs/DECISIONS.md fix round 5 on schematic graph geometry,low
+Twin Peaks Blvd east switchback upper (fixture graph node),37.754100,-122.446800,240.0,control,estimated from surrounding terrain,low
+Twin Peaks Blvd saddle east side (fixture graph node),37.755000,-122.446000,255.0,control,estimated from surrounding terrain; between the sourced south peak and the Christmas Tree Point row,low
+Twin Peaks Blvd saddle west side (fixture graph node),37.755000,-122.448400,250.0,control,estimated from surrounding terrain,low
+Twin Peaks Blvd north loop (fixture graph node),37.757400,-122.446200,258.0,control,estimated from surrounding terrain,low
+Twin Peaks Blvd descent to Clarendon,37.757400,-122.448800,220.0,control,estimated from surrounding terrain: even grade between the north loop and the Clarendon curve,low
+Clarendon Ave east of Twin Peaks Blvd (fixture graph node),37.758400,-122.449000,185.0,control,estimated from surrounding terrain; below the existing Twin Peaks Blvd Clarendon curve row,low
+Clarendon Ave midway to Market St (fixture graph node),37.758800,-122.446000,205.0,control,estimated from surrounding terrain: this fixture graph link crosses Twin Peaks' north shoulder rather than following real Clarendon Ave,low
+Market St at Clayton St (fixture graph node),37.759000,-122.442900,112.0,control,estimated from surrounding terrain: upper Market at the foot of the Clayton St climb; coordinates are the fixture graph's own node,low
+Market St at Corbett Ave (fixture graph node),37.759700,-122.441500,105.0,control,estimated from surrounding terrain; coordinates are the fixture graph's own node,low
+Portola Dr west of Market St,37.748000,-122.440300,163.0,control,estimated from surrounding terrain: even grade below the top of Market,low
+Oak St at Masonic Ave,37.772130,-122.445566,46.0,control,estimated from surrounding terrain: the Panhandle's south side rising west from Baker St; coordinates are the fixture graph's own intersection node,low
+Fell St at Masonic Ave,37.773156,-122.445748,44.0,control,estimated from surrounding terrain; coordinates are the fixture graph's own intersection node,low
+Oak St at Stanyan St,37.771240,-122.453555,55.0,control,estimated from surrounding terrain: the Panhandle's west end at Golden Gate Park; coordinates are the fixture graph's own intersection node,low
+Fell St at Stanyan St,37.772266,-122.453737,52.0,control,estimated from surrounding terrain; coordinates are the fixture graph's own intersection node,low

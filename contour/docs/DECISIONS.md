@@ -1457,12 +1457,17 @@ committed test (`test_build_profile_on_real_sf_path_is_physically_plausible`) as
 band (100-350 m ascent, 20-200 m descent, ascent > descent, 0 < max grade <= 40%) rather than the
 measured point value, consistent with the brief's "not a precise value — a sanity band" instruction
 and with design doc §2.3's repeated point that this fixture DEM cannot certify accuracy at any
-tight tolerance. `max_grade_pct` (37.9%) is high for a real SF street but not implausible for this
-specific synthetic DEM, whose known limitation (§2.3: "effective resolution is far coarser than its
-10 m grid... except where control points are locally dense") can produce locally sharp
-interpolation transitions near a sparsely-controlled summit approach; the ceiling was set generously
-(40%) rather than tightened to the observed value, so the test doesn't silently become a golden-value
-assertion in disguise.
+tight tolerance. ~~`max_grade_pct` (37.9%) is high for a real SF street but not implausible ...
+near a sparsely-controlled summit approach~~ — **CORRECTED in Task 4 fix round 5: that explanation
+named the wrong location.** The 37.9% was not on the summit approach; the saddle sampled correctly
+(275.2 m against ~281 m). It was at `(-122.4429, 37.7476)` on **Portola Drive**, ~1000 m before the
+saddle, where only two control points lay within ~350 m and both were at 152-165 m while the road
+is at ~160 m in reality and read 38-47 m in the DEM — a ~127 m gap bridged by a sustained
+near-linear ramp. Portola is a `primary` arterial with Muni service and five segments in the
+fixture graph, so this was routable terrain directly under `embarcadero_to_twin_peaks`'s
+`max_grade_pct_lt: 12`. Fixed in fix round 5; Portola now reads 11.2% max. The route's
+`ascent_m > descent_m` was an artefact of the same defect (the eastern end read 38.9 m instead of
+~168 m, making a net descent look like a climb) and the test's bands were corrected with it.
 
 **Alternatives rejected:** Initializing the hysteresis algorithm's direction from the first observed
 step, with the pivot fixed at `ele[0]` from the start (rejected — produces a spurious "free" leg
@@ -1670,3 +1675,148 @@ independently re-verified. Copied API_FACTS.md RISK #8 (Valhalla `use_hills` nee
 `additional_data.elevation` at tile-build time, "strongly implied, not verbatim-confirmed") into a
 `docker-compose.yml` comment next to the flag it concerns, since that risk previously existed only
 in a file nobody editing compose would be reading.
+
+---
+
+## Task 4, fix round 5: the fifth instance of the coverage defect, this one routable
+
+Task 6's elevation profile over Portola Drive → Twin Peaks Blvd → Clarendon Ave reported
+`max_grade_pct = 37.9` — steeper than Filbert Street, on an arterial that carries buses. The
+review traced it to `(-122.4429, 37.7476)` **on Portola Drive, ~1000 m before the Twin Peaks
+saddle**; the saddle itself sampled correctly. Only two control points lay within ~350 m of that
+segment, both at 152–165 m, while the road there read 38–47 m, so the interpolator bridged a
+~127 m gap with a sustained ~100 m near-linear ramp.
+
+This one mattered more than the Yerba Buena Island hole because **Portola Drive is five `primary`
+segments of the fixture graph** — routable terrain, directly under the `embarcadero_to_twin_peaks`
+golden case's `max_grade_pct_lt: 12`. A phantom 38% grade makes the router avoid a real arterial
+for a reason that has nothing to do with the routing objective.
+
+### What changed: 42 new control points and 5 corrected coordinates
+
+New (`role=control`, holdouts untouched): the **Portola Drive corridor** anchored at every fixture
+graph node from the top of Market to St Francis Circle plus two midpoints; the **Twin Peaks
+Boulevard** climb and **Clarendon Avenue**; the streets **around Buena Vista Park** (Waller ×4,
+Haight ×3, Page ×2, Frederick) at the graph's own generated intersection nodes; **Russian Hill**
+(Jones × Filbert, Leavenworth × Broadway); the **Panhandle** (Oak and Fell at Masonic and Stanyan);
+and **upper Market / Corbett / Grand View / Burnett**. Named summits aside, every new value is
+`estimated from surrounding terrain` at `confidence=low` and says so.
+
+**Five existing control points had coordinates that did not match their own names.** Each was found
+by cross-checking the control table against the fixture graph's real intersection nodes, and each
+was creating an artefact:
+
+| Point | Was | Now | Evidence | It was causing |
+|---|---|---|---|---|
+| Russian Hill summit (Vallejo and Jones) | 37.7998, −122.4177 | 37.7982, −122.4154 | 270 m from the Vallejo/Jones intersection it names; position derived from the graph's own Jones St and Broadway nodes | 48 m from the Filbert/Leavenworth row with a 45.7 m difference → a 95.6% implied gradient; Leavenworth St read **65.6%**, Hyde St 49.5%, Filbert 43.3% |
+| Buena Vista Park summit | 37.7690, −122.4402 | 37.7683, −122.4408 | Wikipedia's own park coordinate, 94 m away | a 175 m peak 70 m from Waller St → Waller **62.3%**, Baker 40.7%, Lyon 41.8%, Haight 34.4% |
+| Burnett Ave near Twin Peaks | 37.7580, −122.4460 | 37.7495, −122.4430 | 800 m north of any Burnett Avenue node in the graph; it sat on Twin Peaks Blvd's north loop | a 70% implied gradient against the new Clarendon anchors |
+| Panhandle (Oak St and Baker St) | 37.7716, −122.4437 | 37.7727, −122.4408 | 280 m west of the Oak × Baker node; value 24→28 m | pulling the Panhandle's mid-block ground below grade; Oak St (primary) read 18.6% |
+| Miraloma Park (Portola Dr and Fowler Ave) | 37.7395, −122.4520 | 37.7368, −122.4505, renamed to Marietta Dr and Bella Vista Way | 680 m off Portola Drive, and 142 m from the Mount Davidson summit row with a 125 m difference | a 88% implied gradient on Mount Davidson's flank |
+
+**This is a distinct defect class from fix round 4's**, and worth naming: not *missing* control
+points but *mislocated* ones. A control point whose coordinate is a few hundred metres off its own
+name is invisible to every check the table has — it is inside the bbox, in range, not a duplicate,
+far from any holdout — and it does damage in proportion to how much elevation it disagrees with
+its new neighbours by. All five were found the same way: scan for pairs of control points closer
+than 300 m whose elevation difference implies a >32% grade, then check each survivor's name against
+the fixture graph's real intersection coordinates.
+
+### The separation guard from fix round 4 caught a real violation
+
+While placing the Buena Vista points, `load_control_points` refused the build: *"Buena Vista Ave
+south corner (ring road junction) … is only 42.5 m from holdout 'Corona Heights summit' … move or
+remove the control point, never the holdout."* The point was dropped. That guard was written one
+round ago against a hypothetical; it fired on the first round that added points near a holdout.
+
+### Corona Heights: −38.9 m → −15.4 m, and why
+
+Correcting the Buena Vista Park summit coordinate moved Corona Heights' error from −38.9 m (a
+1.1 m margin) to **−15.4 m** (a 24.6 m margin) — it is no longer the fragile holdout it has been
+since fix round 2. Along the way, an intermediate configuration pushed it to **−62.6 m**, a real
+gate failure, before the summit correction; that is recorded here rather than quietly skipped,
+because the diagnosis is the useful part: **the Corona Heights holdout's own coordinate
+(37.7659, −122.4406) is 190 m northwest of the actual Corona Heights summit** (Wikipedia:
+37.76465, −122.43914) and sits at Buena Vista Park's south corner, 43 m from the graph's ring-road
+junction node. Its 158.5 m value belongs 190 m east. **As the DEM gets more accurate around Buena
+Vista Park, this holdout will keep getting pushed down**, because the true ground at its recorded
+coordinate is roughly 100–110 m. The holdout was not touched and no tolerance was widened. Flagged
+for whoever owns the holdout set.
+
+### Verified by re-measuring, not asserting
+
+`max_grade_pct` along the Task 6 path is now **56.5%**, and the peak has moved off Portola Drive
+entirely to `(-122.4467, 37.7512)` on Twin Peaks Boulevard. **Portola Drive itself now maxes at
+11.2%**, at `(-122.4549, 37.7447)` on the descent to St Francis Circle, which is genuinely its
+steepest stretch — inside the 8–15% band a real arterial should show. Every `primary` way in the
+graph was swept: worst is Fell Street at 12.3%; Oak 12.1%, Geary 10.2%, Market 6.1%, Potrero 5.8%,
+Van Ness 5.2%, Embarcadero 4.3%, Mission 2.7%.
+
+Sloat Boulevard, 19th Avenue, Bayshore and Alemany are **not in the fixture graph** — it carries
+150 named ways and none of those four. Rather than sample four streets that do not exist, every
+way in the graph was swept.
+
+### The residual: fixture *graph* geometry, not DEM data
+
+Six ways still exceed 40%, and they are the same defect with the blame reversed — the DEM is now
+right and the graph's hand-authored geometry is not:
+
+- **Twin Peaks Boulevard (57.4%)** — the graph's node `(-122.4470, 37.7526)` is **48 m** from the
+  sourced Twin Peaks south peak (275.5 m), and the polyline covers the Portola→Clarendon climb in
+  1.6 km where the real switchbacked road takes roughly twice that.
+- **Buena Vista Avenue East / West / Avenue (68.7 / 44.0 / 41.4%)** — the graph routes the park's
+  ring roads across the park's own 175 m hill; the Avenue East node is 109 m from the summit.
+- **Market Street (51.1%) and Clarendon Avenue (41.4%)** — the graph links Twin Peaks Boulevard
+  *east* to Market × Clayton. Real Clarendon Avenue runs *west* to Laguna Honda; the invented link
+  crosses the hillside that in reality carries only the Pemberton Place and Vulcan stairways —
+  **both of which are present in this same graph as `highway=steps`**.
+
+These belong to Task 3. They are pinned as an exact set (see below), not waved through.
+
+### The regression test, and its ceilings
+
+`test_no_fixture_graph_arterial_samples_an_implausible_grade` — every `highway=primary` way must
+sample under **15%**, no exceptions. Justification: `primary` is SF's arterial grid, graded for
+trolleybuses and freight; the steepest real one here is Portola's descent at ~8–10%, and the
+measured worst is 12.3%. 15% has real headroom without being vacuous — the defect it exists to
+catch measured 37.9%.
+
+`test_steep_fixture_graph_streets_are_exactly_the_documented_ones` — **40%** for every non-stairway
+way, asserted as **set equality** against a named `KNOWN_SCHEMATIC_GEOMETRY_WAYS`, not as an
+allowlist. 40% is above the steepest street San Francisco has (Filbert and 22nd tie at ~31.5%; this
+DEM renders the Filbert block at 36.6%, which must stay allowed); above it, it is not a street.
+Set equality means a new offender fails *and a fixed one still listed fails*, so the exception list
+cannot quietly become the way this defect class gets ignored.
+
+`test_portola_drive_reads_as_an_arterial_not_a_wall` — the specific finding, banded 2–15%.
+
+Sampling every way in the graph is what makes these tests worth having: **this defect class was
+found four times by hand inspection before any test caught it.**
+
+### Two existing tests were corrected, with justification (CLAUDE.md §9.1)
+
+- `test_interpolation_parameters_match_cv_sweep_winner` asserted exact argmin identity. At 258
+  control points the argmin flipped from `neighbors=None` (13.62 m median LOO) to `neighbors=20`
+  (13.57 m) — 0.05 m, the same order as the `smoothing` tie that has been documented since fix
+  round 1. Exact identity turns that noise into a build failure and pressures whoever adds control
+  points into re-tuning the interpolator as a side effect of adding data, which is how a measured
+  choice quietly becomes a fitted one. Replaced by
+  `test_interpolation_parameters_are_not_materially_worse_than_the_sweep_winner`: the pinned config
+  must be within 1.0 m median LOO of the winner (~20× the tie spread, ~7% of the current median).
+  **`smoothing=0.0, neighbors=None` was not changed** — the ruling stands, and no re-tune was done.
+- `test_build_profile_on_real_sf_path_is_physically_plausible` asserted `ascent_m > descent_m` and
+  `max_grade <= 40`. Both encoded the artefact: with Portola's eastern end reading 38.9 m instead
+  of ~168 m, a net descent looked like a climb from near sea level. Bands corrected to the terrain.
+
+Interpolation quality improved as a side effect of the added data: median LOO error 16.39 → **13.62 m**,
+p90 72.71 → **64.19 m**. In-hull (land) clamping 3.35% → **2.89%**; total 30.99% → **30.82%**.
+
+**Alternatives rejected:** Removing the Buena Vista ring-road points to rescue Corona Heights
+(rejected as working around the finding — the summit-coordinate correction fixed it on the merits
+instead, and the −62.6 m intermediate is reported above). Re-running the sweep and adopting
+`neighbors=20` (rejected — explicitly out of scope, and a 0.05 m difference is not a reason).
+Widening any tolerance (rejected). Editing the Corona Heights holdout's wrong coordinate (rejected
+— holdouts are not this task's to touch, so it is reported instead). Allowlisting the six
+graph-geometry ways by membership (rejected in favour of set equality, so the list cannot grow
+silently). "Fixing" the fixture graph's Twin Peaks and Buena Vista geometry (rejected — Task 3's,
+and a reviewer is concurrently in that area).
