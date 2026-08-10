@@ -1025,3 +1025,98 @@ selection process). Treating the Corona Heights fragility as a one-off anomaly n
 (rejected — it is a real, general property of local-neighbor RBF interpolation that will recur
 under the real 3DEP/real-graph pipeline too, and costs nothing to write down once, here, for
 whoever hits it next).
+
+## Task 5: Geodesic polyline resampling and bilinear DEM sampling
+
+**Decided:** `services/api/contour/elevation.py` implements `geodesic_length_m`, `resample_polyline`,
+and `DemSampler` exactly per the design doc §4.4 / task-5-brief.md interfaces. `resample_polyline`
+uses `pyproj.Geod(ellps="WGS84")` — `inv` for per-edge distance + forward azimuth, `fwd` to step
+along each edge — never planar interpolation, per the brief's stated reason (SF spans enough
+longitude that planar interpolation drifts over a multi-kilometre route). `DemSampler` opens the
+DEM once in `__init__`, reads its single band fully into memory, and reuses that state across
+`sample()` calls.
+
+**Bilinear was hand-rolled, not taken from a library.** `rasterio.sample()` (and
+`rasterio.sample.sample_gen`) is nearest-neighbour only — confirmed directly by exercising it in
+`tests/test_elevation_sampling.py::test_dem_sampler_bilinear_differs_from_nearest_neighbor`, which
+asserts the two methods disagree at a deliberately off-centre point. `scipy.interpolate` (already a
+project dependency, used by Task 4's DEM generator) was considered as an alternative source for
+bilinear interpolation (e.g. `RegularGridInterpolator`), and rejected: it would mean re-reading the
+whole grid into a scipy-managed structure with its own coordinate-ordering conventions to interpolate
+one number, for no accuracy benefit over the direct closed-form 2x2 bilinear formula, and it
+obscures exactly the row/col arithmetic that the lon/lat-order bug this module is most worried about
+lives in. The hand-rolled version is ~15 lines: convert (lon, lat) to fractional (col, row) via the
+dataset's inverse affine transform, shift by -0.5 into pixel-*centre* coordinates (GDAL's affine
+transform is corner-referenced), floor to get the 2x2 neighbourhood, and interpolate. No new
+dependency was added (`numpy` and `rasterio` are already present, per the brief's resolution #4);
+`itertools.pairwise` (stdlib) replaced an initial `zip(coords, coords[1:], strict=True)` that was a
+real bug caught by the RED test run (see below) — `strict=True` requires equal-length iterables, but
+a pairwise zip is intentionally one element short, so every call raised `ValueError` immediately.
+
+**Edge-clamping choice.** A query point can be inside the raster's bounding box (between the outer
+edges of the outermost pixels) but past the *centre* of the outermost pixel — the "outermost
+half-pixel margin" — where a full 2x2 interpolation neighbourhood isn't available on one side.
+`DemSampler.sample()` clamps the fractional pixel coordinate into `[0, width-1)` / `[0, height-1)`
+in that case, which pins the point to the nearest valid neighbourhood (in the limit, the corner
+pixel's own value) rather than raising. This was resolution #2 in the task-5 brief, and the
+reasoning is unchanged from there: real coastal/service-area-edge points are legitimate DEM queries,
+and rejecting them just for being close to the grid boundary would be wrong — only a point genuinely
+outside the bounding box (`ValueError`, "outside the DEM extent") or one whose neighbourhood touches
+a masked/nodata pixel (`ValueError`, "masked/nodata DEM pixel") fails loudly. Both are covered by
+dedicated tests (`test_dem_sampler_clamps_at_raster_edge_instead_of_raising`,
+`test_dem_sampler_raises_on_masked_nodata_neighborhood`); the fixture DEM itself carries zero nodata
+pixels (Task 4), so the nodata-raising test uses a small synthetic in-memory GeoTIFF built in the
+test file rather than the committed fixture.
+
+**Why fail loudly on out-of-bounds/masked, rather than returning nodata.** Per the brief: a route's
+elevation profile downstream (Task 6) accumulates ascent and computes grades from every sampled
+point. A silently-returned nodata sentinel (e.g. `-9999.0`) would get treated as a real elevation and
+averaged into ascent/grade math, producing a wrong number with no error anywhere in the pipeline —
+much harder to debug than an immediate `ValueError` at the sampling boundary.
+
+**`affine` used directly in tests, not runtime code — not a new dependency.** The synthetic-raster
+test helper (`_write_synthetic_dem` in `tests/test_elevation_sampling.py`) constructs an
+`affine.Affine` transform to hand-build small GeoTIFFs with exact, known pixel values (needed for the
+bilinear-vs-nearest contrast, exact-value, edge-clamp, and nodata tests, where the real fixture DEM's
+smoothed terrain surface can't guarantee a specific number). `affine` is already an unconditional
+transitive dependency of `rasterio` (rasterio's own `dataset.transform` is an `affine.Affine`
+instance) and was already present in the resolved environment; it is not added to `pyproject.toml`
+as a direct dependency because runtime code (`contour/elevation.py`) never imports it directly —
+only the test file does, for GeoTIFF authoring convenience.
+
+**Coordinate-order test.** `test_dem_sampler_lon_lat_order_is_not_swapped` samples two named
+landmarks with clearly different, individually-plausible elevations in the correct `(lon, lat)`
+order (Twin Peaks, a hill, vs. SoMa, near sea level — see `tests/test_fixture_dem.py`'s own
+shape-sanity-check coordinates for both), then asserts that swapping one of them to `(lat, lon)`
+raises `ValueError`. This is a stronger assertion than "returns a different plausible elevation":
+`SF_BBOX`'s lon range (~-122.5) and lat range (~37.7-37.8) don't overlap in magnitude at all, so a
+genuinely swapped SF coordinate can never land back inside the DEM's extent — it is structurally
+guaranteed to raise the same "outside the DEM extent" error a wildly-out-of-service-area point would.
+An implementation that silently swapped lon/lat *internally* (e.g. indexing the affine transform
+with `(lat, lon)` instead of `(lon, lat)`) would fail the *correctly-ordered* calls in this same test
+instead, for the equivalent reason: the internal fractional pixel coordinate would be computed from
+values wildly outside the raster's pixel index range.
+
+**Degenerate inputs, tested directly per the brief ("not hypothetical").** Empty input, a
+single-point input, consecutive duplicate coordinates mid-route, leading/trailing duplicates, and
+every-point-identical are each covered by a dedicated test in
+`tests/test_elevation_sampling.py`. Zero-length edges (`Geod.inv` distance `<= 1e-6` m) are skipped
+during segment-building rather than stepped along, since a zero-length edge has no defined azimuth.
+
+**Round-trip accuracy.** `test_resample_1km_north_south_line_has_101_points` (brief step 1) and
+`test_resample_polyline_round_trip_accuracy_multi_vertex` (task instructions' required addition, a
+zigzag multi-vertex path) both assert the final cumulative distance matches
+`geodesic_length_m`/`pyproj.Geod`'s independently computed total length to within 0.5 m. This holds
+by construction rather than by luck: the final sample's distance is `total_length_m`, computed by
+summing the same `Geod.inv` per-edge distances `geodesic_length_m` sums, not by re-deriving it via
+`Geod.fwd` stepping (which would accumulate its own floating-point drift over many steps).
+
+**Alternatives rejected:** Using `rasterio.sample()` directly and accepting nearest-neighbour
+sampling (rejected outright — the brief's explicit stated reason: it produces a stair-step artefact
+that reads downstream as alternating 0%/8% phantom grades on flat ground). Reopening the rasterio
+dataset per `sample()` call (rejected — resolution #1: reopening per call would dominate the
+1200 ms p95 route-request latency budget, since a route resamples to thousands of points). Looping
+one `dataset.read()`/`Geod.fwd()` call per point instead of vectorizing with numpy (rejected —
+resolution #3, same latency reasoning). Raising on any point in the outermost half-pixel margin
+instead of clamping (rejected — resolution #2: would reject legitimate coastal/edge-of-service-area
+points, which the fixture DEM covers right up to `SF_BBOX`'s boundary).
