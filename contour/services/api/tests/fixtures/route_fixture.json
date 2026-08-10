@@ -1,0 +1,55 @@
+{
+  "request_id": "fixture-request-0001",
+  "model_version": "effort-v1",
+  "data_manifest": "sha256:fixture0000000000000000000000000000000000000000000000000000ab",
+  "routes": [
+    {
+      "id": "r1",
+      "label": "Gentlest",
+      "geometry": "wpg`gAncnohF_q@o}@gw@ovAod@_cB_q@_cB_q@_cBw|A_uC",
+      "distance_m": 4820,
+      "duration_s": 1290,
+      "ascent_m": 22,
+      "descent_m": 41,
+      "max_grade_pct": 4.8,
+      "flat_equivalent_m": 7020,
+      "effort_score": 7020,
+      "grade_segments": [
+        { "start_idx": 0, "end_idx": 2, "grade_pct": 1.2, "class": "flat" },
+        { "start_idx": 2, "end_idx": 4, "grade_pct": 5.1, "class": "gentle" },
+        { "start_idx": 4, "end_idx": 6, "grade_pct": 4.8, "class": "gentle" }
+      ],
+      "elevation_profile": [
+        { "dist_m": 0, "ele_m": 17.0 },
+        { "dist_m": 800, "ele_m": 24.3 },
+        { "dist_m": 1600, "ele_m": 31.8 },
+        { "dist_m": 2400, "ele_m": 22.5 },
+        { "dist_m": 3200, "ele_m": 14.1 },
+        { "dist_m": 4056, "ele_m": 8.6 },
+        { "dist_m": 4820, "ele_m": 6.4 }
+      ],
+      "steep_sections": [
+        {
+          "start_dist_m": 1200,
+          "end_dist_m": 1380,
+          "grade_pct": 9.4,
+          "street": "Duboce Ave",
+          "ascent_m": 17
+        }
+      ],
+      "comparison_to_fastest": {
+        "delta_distance_m": 640,
+        "delta_duration_s": 180,
+        "delta_ascent_m": -58
+      },
+      "explanation": "Saves 190 ft of climbing for 0.4 miles and 3 minutes more."
+    }
+  ],
+  "warnings": [
+    {
+      "code": "UNAVOIDABLE_CLIMB",
+      "message": "Every route to this destination climbs at least 210 ft.",
+      "detail": { "min_ascent_m": 64 }
+    }
+  ]
+}

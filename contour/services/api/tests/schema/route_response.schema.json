@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://contour.example/schemas/route_response.schema.json",
+  "title": "Contour /v1/route 200 response",
+  "description": "Hand-derived from SPEC.md §6 \"API contract\", field-for-field. This is the binding contract: later tasks (real routing, mobile client codegen) must satisfy it unchanged.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["request_id", "model_version", "data_manifest", "routes", "warnings"],
+  "properties": {
+    "request_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "model_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "data_manifest": {
+      "type": "string",
+      "minLength": 1
+    },
+    "routes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/route" }
+    },
+    "warnings": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/warning" }
+    }
+  },
+  "$defs": {
+    "route": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "label",
+        "geometry",
+        "distance_m",
+        "duration_s",
+        "ascent_m",
+        "descent_m",
+        "max_grade_pct",
+        "flat_equivalent_m",
+        "effort_score",
+        "grade_segments",
+        "elevation_profile",
+        "steep_sections",
+        "comparison_to_fastest",
+        "explanation"
+      ],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "label": {
+          "type": "string",
+          "enum": ["Gentlest", "Balanced", "Fastest", "Only route"]
+        },
+        "geometry": {
+          "type": "string",
+          "description": "Encoded polyline6 (precision 6)."
+        },
+        "distance_m": { "type": "number", "minimum": 0 },
+        "duration_s": { "type": "number", "minimum": 0 },
+        "ascent_m": { "type": "number", "minimum": 0 },
+        "descent_m": { "type": "number", "minimum": 0 },
+        "max_grade_pct": { "type": "number" },
+        "flat_equivalent_m": { "type": "number", "minimum": 0 },
+        "effort_score": { "type": "number", "minimum": 0 },
+        "grade_segments": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/grade_segment" }
+        },
+        "elevation_profile": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/profile_point" }
+        },
+        "steep_sections": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/steep_section" }
+        },
+        "comparison_to_fastest": { "$ref": "#/$defs/comparison_to_fastest" },
+        "explanation": { "type": "string", "minLength": 1 }
+      }
+    },
+    "grade_segment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_idx", "end_idx", "grade_pct", "class"],
+      "properties": {
+        "start_idx": { "type": "integer", "minimum": 0 },
+        "end_idx": { "type": "integer", "minimum": 0 },
+        "grade_pct": { "type": "number" },
+        "class": {
+          "type": "string",
+          "enum": ["flat", "gentle", "moderate", "steep", "wall"]
+        }
+      }
+    },
+    "profile_point": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dist_m", "ele_m"],
+      "properties": {
+        "dist_m": { "type": "number", "minimum": 0 },
+        "ele_m": { "type": "number" }
+      }
+    },
+    "steep_section": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_dist_m", "end_dist_m", "grade_pct", "street", "ascent_m"],
+      "properties": {
+        "start_dist_m": { "type": "number", "minimum": 0 },
+        "end_dist_m": { "type": "number", "minimum": 0 },
+        "grade_pct": { "type": "number" },
+        "street": { "type": ["string", "null"] },
+        "ascent_m": { "type": "number" }
+      }
+    },
+    "comparison_to_fastest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["delta_distance_m", "delta_duration_s", "delta_ascent_m"],
+      "properties": {
+        "delta_distance_m": { "type": "number" },
+        "delta_duration_s": { "type": "number" },
+        "delta_ascent_m": { "type": "number" }
+      }
+    },
+    "warning": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message", "detail"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": ["UNAVOIDABLE_CLIMB", "STEEP_SECTION_AHEAD", "LONG_DETOUR"]
+        },
+        "message": { "type": "string", "minLength": 1 },
+        "detail": { "type": "object" }
+      }
+    }
+  }
+}

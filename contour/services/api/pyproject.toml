@@ -23,6 +23,8 @@ dev = [
   "ruff",
   "mypy",
   "types-pyyaml",
+  "jsonschema",
+  "types-jsonschema",
 ]
 
 [build-system]
@@ -45,3 +47,9 @@ python_version = "3.12"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+filterwarnings = [
+  # starlette 1.6.0's TestClient nags to install the brand-new "httpx2"
+  # package in place of httpx; see docs/DECISIONS.md (Task 3) for why we
+  # keep httpx instead of adopting an unvetted replacement mid-task.
+  "ignore::starlette.exceptions.StarletteDeprecationWarning",
+]

@@ -206,3 +206,121 @@ system already communicates via the corrected §4.2 annotations; flagged here in
 wants stricter enforcement). Checking model-version equality to `constants.py` inside
 `validate_effort_model` (rejected — explicitly the thing fix round 1 says not to undo; would make
 `effort-v2.json` unloadable by construction).
+
+---
+
+## Task 3: FastAPI service, `/v1/health`, schema-validated fixture `/v1/route`
+
+**Decided:** `tests/schema/route_response.schema.json` (JSON Schema draft 2020-12) was hand-derived
+from SPEC.md §6 field-for-field, with `additionalProperties: false` at every object level (top
+level, `route`, `grade_segment`, `profile_point`, `steep_section`, `comparison_to_fastest`,
+`warning`). `contour/schemas.py` (pydantic v2, `extra="forbid"` everywhere) is a second,
+independent encoding of the same contract; `tests/test_api_fixture.py::test_committed_fixture_file_validates_against_schema`
+and `test_route_returns_schema_valid_fixture` prove the pydantic models, the hand-written JSON
+Schema, and the committed fixture all agree.
+**Why:** Per the brief, this schema is the binding contract for Task 15 (real routing, must not
+change the shape) and Task 18 (TypeScript codegen for the mobile client) — deriving it by hand
+from §6 rather than auto-generating it from the pydantic models keeps it as an independent check
+on the models, not a restatement of whatever they happen to say. `additionalProperties: false`
+was chosen deliberately strict: a stray/renamed field is exactly the kind of drift Task 15 could
+introduce by accident while wiring in real data, and the schema should catch it immediately
+rather than silently accept extra keys.
+
+**Decided:** `contour.schemas.GradeSegmentOut` keeps the Python attribute name `klass` (matching
+`contour.types.GradeSegment`) but declares `Field(alias="class")`, with
+`model_config = ConfigDict(populate_by_name=True, extra="forbid")` on every response model that
+uses aliasing. FastAPI's default `response_model_by_alias=True` then serializes the wire field as
+`"class"`. `test_route_response_emits_class_not_klass` asserts the emitted JSON has `"class"` and
+not `"klass"` on every `grade_segments[]` entry, calling the real `/v1/route` endpoint through
+`TestClient` rather than testing the pydantic model in isolation.
+**Why:** Exactly the task's resolution #2 and its stated rationale — this is "the kind of thing
+that silently ships wrong" if only unit-tested against the model directly; testing through the
+actual HTTP response closes the gap between "the model can serialize correctly" and "the endpoint
+actually does."
+
+**Decided:** `RouteRequest.units: Literal["imperial", "metric"] = "imperial"` was added per task
+resolution #1. It is request-only — no response field reads it in this task, since the fixture's
+`explanation` string is static. `RouteOut`, `elevation_profile`, `steep_sections`, etc. all stay
+strictly metric per SPEC.md §8.3, matching the resolution's "only the rendered `explanation`
+string honours it" instruction; Task 15's real `explain.py` is the one that will actually branch
+on `units` when generating that string.
+**Why:** Matches the resolution verbatim; recorded here rather than re-litigated, per the task's
+explicit instruction.
+
+**Decided:** `GET /v1/health` computes `status` dynamically — `"ok"` iff both
+`engine_reachable and dem_readable` are truthy, else `"degraded"` — rather than hardcoding `"ok"`.
+`engine_reachable = False` and `dem_readable = None` are returned honestly (nothing in this task
+wires up a routing engine or DEM reader); `manifest_hash = None` for the same reason (no
+`data/manifest.json` exists yet — `make data`/`make fixtures` are still stubs per Task 1).
+`model_version` comes from the real `load_effort_model().model_version` (`"effort-v1"`), not the
+SPEC.md §6 example's illustrative `"effort-v1.2"` string, since that version file doesn't exist.
+**Why:** Task resolution #5 — "do not fake them true." Computing `status` from the two honest
+booleans (rather than a third independently-hardcoded field) means it can't silently drift from
+them once Task 15 wires the engine/DEM in for real; the health check would flip to `"ok"`
+automatically the moment both dependencies genuinely become reachable, with no code change needed
+here.
+
+**Decided:** The committed fixture (`tests/fixtures/route_fixture.json`) uses the exact
+origin/destination SPEC.md §6 already specifies in its own worked example — Duboce & Market
+(37.7695, -122.4290) to 37.7749, -122.4194 — and reuses that example's numeric values
+(`distance_m: 4820`, `ascent_m: 22`, `descent_m: 41`, etc.) and its `UNAVOIDABLE_CLIMB` warning
+verbatim, including `detail.min_ascent_m: 64`, which matches `constants.UNAVOIDABLE_CLIMB_M`
+exactly. `geometry` is a real (not placeholder) polyline6-encoded string, hand-encoded from a
+plausible sequence of coordinates along that corridor; `elevation_profile`'s start elevation
+(17.0 m) matches the design doc's committed Duboce & Market control point rather than the SPEC
+example's illustrative `12.4`. The fixture contains exactly one route (`label: "Gentlest"`), not
+three, since nothing in this task ranks alternatives — Task 15 is what produces genuinely
+distinct Gentlest/Balanced/Fastest candidates.
+**Why:** Task resolution #4 ("a realistic SF route... the §6 example uses Duboce & Market to a
+nearby destination") plus "It must validate against your own schema; that is the point of the
+task" — reusing SPEC's own worked numbers keeps the fixture traceably tied to the authoritative
+example rather than inventing parallel data, while the real polyline encoding and the
+design-doc-consistent elevation value keep it honestly "realistic" instead of a schema-shaped
+stub.
+
+**Decided:** The `ContourError` → HTTP status mapping (`OUT_OF_SERVICE_AREA` / `INVALID_REQUEST` /
+`NO_ROUTE_FOUND` / `ORIGIN_UNSNAPPABLE` → 422, `ENGINE_UNAVAILABLE` → 503) lives in a single
+`_ERROR_STATUS` dict in `api.py`, consumed by one `@app.exception_handler(ContourError)` that
+returns the flat `{"code", "message", "detail"}` body. A second handler,
+`@app.exception_handler(RequestValidationError)`, gives FastAPI's own body-validation failures
+(e.g. `effort_preference` out of `1..5`) the same flat shape, tagged `INVALID_REQUEST`, instead of
+FastAPI's default `{"detail": [...]}` envelope.
+**Why:** Task resolution #3 covers `ContourError` explicitly; the `RequestValidationError` handler
+is an extension of the same requirement — the brief's stated goal ("no raw error strings reach the
+UI", "not nested under FastAPI's default `detail` envelope") is a property of every non-2xx
+response this service returns, and a malformed request body is the single most likely way a client
+hits a non-`ContourError` failure. Leaving FastAPI's default envelope in place for that one path
+would mean the mobile client (Task 18) has to special-case it. Verified live via
+`test_route_invalid_effort_preference_rejected_with_flat_body` and by calling the endpoint
+directly and printing the body during self-review, not just asserting `status_code`.
+
+**Decided:** Added `jsonschema` (dev-only) and its stub package `types-jsonschema` (dev-only) to
+`[dependency-groups] dev` in `services/api/pyproject.toml`.
+**Why:** Explicitly authorized by the task ("Add `jsonschema` as a dev dependency... record it in
+`docs/DECISIONS.md`"); needed to run `jsonschema.validate(...)` against the hand-derived schema in
+tests. `types-jsonschema` was needed separately because `mypy --strict` rejects untyped imports
+(`import-untyped`) without it; not a new runtime dependency, dev/type-checking only.
+
+**Decided:** Added a `[tool.pytest.ini_options] filterwarnings` entry ignoring
+`starlette.exceptions.StarletteDeprecationWarning`.
+**Why:** `starlette` 1.6.0's `TestClient` emits a deprecation warning at import time nagging to
+install a very new, separately-named `httpx2` package in place of `httpx` (which is already a
+pinned `services/api` dependency, used nowhere near its deprecation surface here). Adopting
+`httpx2` — an unfamiliar, newly-published package — mid-task to silence a notice, without the
+usual scrutiny a new dependency deserves, was judged worse than a one-line, narrowly-scoped
+`filterwarnings` entry; this is not a new dependency and doesn't touch `httpx` itself. Flagged here
+for whoever eventually evaluates `httpx2` deliberately, rather than by default. Verified `pytest`
+now runs with zero warnings (`42 passed` with no `warnings summary` section).
+
+**Alternatives rejected:** Auto-generating `route_response.schema.json` from the pydantic models
+via `model_json_schema()` (rejected — would make the "contract" merely a mirror of whatever the
+models say, defeating the purpose of an independent hand-derived check; the brief's Step 1 says
+"by hand" explicitly). Loading the fixture from `contour/tests/fixtures/` inside the package
+(rejected — task resolution #4's exact path is `services/api/tests/fixtures/route_fixture.json`;
+`api.py` resolves it via `Path(__file__).resolve().parents[1]`, i.e. it deliberately reaches
+*out* of the package into the test tree, which is unusual but is what the resolution asks for —
+Task 15 is expected to change this when the fixture stops being the response source). Hardcoding
+`GET /v1/health`'s `status` to `"ok"` (rejected outright — task resolution #5 forbids faking
+`engine_reachable`/`dem_readable` true, and a hardcoded-`"ok"` status next to two honest `false`
+fields would be misleading in the same spirit even though the resolution doesn't literally mention
+`status`).
