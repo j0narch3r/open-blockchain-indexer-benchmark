@@ -50,6 +50,8 @@ import json
 import math
 import re
 import sys
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -67,10 +69,11 @@ if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
 from net_fetch import (  # noqa: E402
+    DEFAULT_MAX_RESUME_ATTEMPTS,
     DownloadOutcome,
     Fetcher,
     HttpxFetcher,
-    conditional_resumable_download,
+    download_until_complete,
     sha256_of,
 )
 
@@ -189,18 +192,39 @@ def download_tiles(
     tiles: list[str],
     *,
     dest_dir: Path = DEFAULT_RAW_TILE_DIR,
+    max_attempts: int = DEFAULT_MAX_RESUME_ATTEMPTS,
+    sleep: Callable[[float], None] = time.sleep,
 ) -> list[TileDownload]:
     """Download every tile in `tiles`, resuming/skipping per
-    `net_fetch.conditional_resumable_download` (Global Constraints: never
+    `net_fetch.download_until_complete` (Global Constraints: never
     re-download an unchanged extract, rate-limit outbound downloads — the
     rate limiting lives in `HttpxFetcher` itself, so it applies uniformly
-    to every tile without special-casing here)."""
+    to every tile without special-casing here).
+
+    Fix round 1: this used to call `net_fetch.conditional_resumable_download`
+    directly (a single request) and then hash `dest` unconditionally — a
+    `RESUMED_INCOMPLETE` outcome left only a `.partial` file on disk, so
+    `sha256_of(dest)` raised a confusing `FileNotFoundError` instead of
+    either completing the resume or failing with a clear message. Routed
+    through `download_until_complete` instead, which retries a genuinely
+    incomplete resume up to `max_attempts` times and only returns once the
+    file is actually whole (or raises `ResumeIncompleteError` naming the
+    file and how far it got); `sha256_of` is now called on `result.path`
+    (the actually-finished file `download_until_complete` returns), never
+    on the pre-download `dest` path, so it can never target a file that
+    doesn't exist yet. `sleep` is a parameter (default `time.sleep`) purely
+    so a test can drive a multi-round resume without a real backoff delay.
+    """
     results = []
     for tile in tiles:
         dest = dest_dir / f"USGS_13_{tile}.tif"
-        result = conditional_resumable_download(fetcher, tile_url(tile), dest)
+        result = download_until_complete(
+            fetcher, tile_url(tile), dest, max_attempts=max_attempts, sleep=sleep
+        )
         results.append(
-            TileDownload(tile=tile, path=dest, outcome=result.outcome, sha256=sha256_of(dest))
+            TileDownload(
+                tile=tile, path=result.path, outcome=result.outcome, sha256=sha256_of(result.path)
+            )
         )
     return results
 

@@ -31,7 +31,7 @@ import hashlib
 import json
 import re
 import time
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -123,11 +123,11 @@ class CacheMeta:
     last_modified: str | None
 
 
-def _meta_path_for(dest_path: Path) -> Path:
+def meta_path_for(dest_path: Path) -> Path:
     return dest_path.with_name(dest_path.name + ".meta.json")
 
 
-def _partial_path_for(dest_path: Path) -> Path:
+def partial_path_for(dest_path: Path) -> Path:
     return dest_path.with_name(dest_path.name + ".partial")
 
 
@@ -210,8 +210,8 @@ def conditional_resumable_download(
     Global Constraints: "Never re-download an unchanged extract... use
     conditional requests (If-Modified-Since / ETag) and resume support."
     """
-    meta_path = meta_path or _meta_path_for(dest_path)
-    partial_path = partial_path or _partial_path_for(dest_path)
+    meta_path = meta_path or meta_path_for(dest_path)
+    partial_path = partial_path or partial_path_for(dest_path)
 
     headers: dict[str, str] = {}
     resuming = False
@@ -264,6 +264,83 @@ def conditional_resumable_download(
         return DownloadResult(DownloadOutcome.DOWNLOADED, dest_path, len(resp.content))
 
     raise UnexpectedStatusError(f"{url}: unexpected HTTP status {resp.status}")
+
+
+# --- Bounded multi-round resume ----------------------------------------------
+#
+# `conditional_resumable_download` above makes exactly one request and can
+# return `RESUMED_INCOMPLETE` — a real server response to a real `Range`
+# request when the remaining bytes don't fit in one reply. Every caller
+# that only invokes it once (fix round 1: `fetch_3dep.py::download_tiles`
+# and `clip_osm.py::download_norcal_extract` both did, originally) has
+# resume support that cannot actually resume: on an interrupted ~1 GB OSM
+# extract or ~213 MB DEM tile, that's the expected case, not an edge case.
+# `download_until_complete` is the caller both scripts now use instead.
+
+DEFAULT_MAX_RESUME_ATTEMPTS: int = 5
+
+
+class ResumeIncompleteError(RuntimeError):
+    """A resumable download did not finish within its attempt budget.
+
+    The `.partial` file is deliberately left on disk (never deleted) so the
+    next invocation of `download_until_complete` picks up exactly where
+    this one stopped, per its `Range` header — that continuation is the
+    entire point of resume support.
+    """
+
+
+def _default_backoff_s(attempt: int) -> float:
+    """Exponential backoff, capped at 30s: 1, 2, 4, 8, 16, 30, 30, ..."""
+    return min(2.0 ** (attempt - 1), 30.0)
+
+
+def download_until_complete(
+    fetcher: Fetcher,
+    url: str,
+    dest_path: Path,
+    *,
+    meta_path: Path | None = None,
+    partial_path: Path | None = None,
+    max_attempts: int = DEFAULT_MAX_RESUME_ATTEMPTS,
+    backoff_s: Callable[[int], float] = _default_backoff_s,
+    sleep: Callable[[float], None] = time.sleep,
+) -> DownloadResult:
+    """Call `conditional_resumable_download` up to `max_attempts` times,
+    retrying (with `backoff_s(attempt)` between tries) only while the
+    outcome is `RESUMED_INCOMPLETE`. Returns as soon as an attempt reports
+    `NOT_MODIFIED`, `DOWNLOADED`, or `RESUMED` (a genuinely finished file).
+
+    Raises `ResumeIncompleteError` — naming the file, how many bytes it has
+    so far, and how many attempts were made — if the file is still
+    incomplete after `max_attempts` tries, rather than silently returning
+    a partial result or crashing on a downstream `FileNotFoundError` (fix
+    round 1: `download_tiles` originally hashed `dest_path` unconditionally,
+    which does not exist for an incomplete resume — only `.partial` does).
+
+    `max_attempts`, `backoff_s`, and `sleep` are all parameters (not
+    hardcoded) so a test can drive a multi-round resume to completion, or
+    to exhaustion, without a real network and without a real sleep.
+    """
+    partial_path = partial_path or partial_path_for(dest_path)
+    last_result: DownloadResult | None = None
+    for attempt in range(1, max_attempts + 1):
+        result = conditional_resumable_download(
+            fetcher, url, dest_path, meta_path=meta_path, partial_path=partial_path
+        )
+        last_result = result
+        if result.outcome != DownloadOutcome.RESUMED_INCOMPLETE:
+            return result
+        if attempt < max_attempts:
+            sleep(backoff_s(attempt))
+
+    partial_bytes = last_result.total_bytes if last_result is not None else 0
+    raise ResumeIncompleteError(
+        f"{url}: did not complete after {max_attempts} attempt(s); "
+        f"{partial_bytes:,} bytes received so far at {partial_path}. "
+        f"The partial file has been left in place — re-run to continue "
+        f"the resume from where it stopped."
+    )
 
 
 def sha256_of(path: Path) -> str:

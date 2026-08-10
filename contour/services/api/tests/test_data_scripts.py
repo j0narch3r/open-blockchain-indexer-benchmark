@@ -13,6 +13,7 @@ Same `sys.path` pattern as `tests/test_fixture_dem.py` for reaching
 `scripts/` from this package's test tree.
 """
 
+import hashlib
 import json
 import sys
 from collections.abc import Mapping
@@ -28,9 +29,10 @@ _SCRIPTS_DIR = Path(__file__).resolve().parents[3] / "scripts"
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
-from clip_osm import validate_service_area_bbox  # noqa: E402
+from clip_osm import download_norcal_extract, validate_service_area_bbox  # noqa: E402
 from fetch_3dep import (  # noqa: E402
     _manifest_dict,
+    download_tiles,
     skadi_tile_name,
     tile_url,
     tiles_for_bbox,
@@ -38,8 +40,11 @@ from fetch_3dep import (  # noqa: E402
 from net_fetch import (  # noqa: E402
     DownloadOutcome,
     FetchResponse,
+    ResumeIncompleteError,
     UnexpectedStatusError,
     conditional_resumable_download,
+    meta_path_for,
+    partial_path_for,
 )
 
 # ---------------------------------------------------------------------------
@@ -377,3 +382,133 @@ def test_unexpected_status_raises(tmp_path: Path) -> None:
     fetcher = StubFetcher([FetchResponse(status=500, headers={}, content=b"")])
     with pytest.raises(UnexpectedStatusError):
         conditional_resumable_download(fetcher, "https://example.invalid/tile.tif", dest)
+
+
+# ---------------------------------------------------------------------------
+# Fix round 1 — orchestration-level coverage (`download_tiles`,
+# `download_norcal_extract`), not just `conditional_resumable_download` in
+# isolation. Review finding: `download_tiles` hashed `dest` unconditionally
+# even for a `RESUMED_INCOMPLETE` outcome (only `.partial` exists then),
+# and neither orchestration function could actually finish a genuinely
+# multi-round resume — resume support that cannot resume. Both are now
+# routed through `net_fetch.download_until_complete`; these tests exercise
+# that plumbing end to end with a stub `Fetcher`, never a real sleep
+# (`sleep=lambda _: None` throughout).
+# ---------------------------------------------------------------------------
+
+
+def _noop_sleep(_seconds: float) -> None:
+    pass
+
+
+def test_download_tiles_completes_a_genuinely_multi_round_resume(tmp_path: Path) -> None:
+    """A partial file left over from an earlier interrupted run, resumed
+    across two separate 206 responses before it's whole — not one response
+    that happens to already contain everything."""
+    tile = "n38w123"
+    dest = tmp_path / f"USGS_13_{tile}.tif"
+    partial = partial_path_for(dest)
+    partial.write_bytes(b"0123456789")  # 10 bytes from a prior, interrupted run
+
+    fetcher = StubFetcher(
+        [
+            FetchResponse(
+                status=206, headers={"Content-Range": "bytes 10-19/30"}, content=b"ABCDEFGHIJ"
+            ),
+            FetchResponse(
+                status=206, headers={"Content-Range": "bytes 20-29/30"}, content=b"KLMNOPQRST"
+            ),
+        ]
+    )
+
+    results = download_tiles(fetcher, [tile], dest_dir=tmp_path, max_attempts=5, sleep=_noop_sleep)
+
+    assert len(results) == 1
+    result = results[0]
+    assert result.outcome == DownloadOutcome.RESUMED
+    assert result.path == dest
+    final_bytes = b"0123456789ABCDEFGHIJKLMNOPQRST"
+    assert dest.read_bytes() == final_bytes
+    assert not partial.exists()  # cleaned up, not left alongside the finished file
+    assert result.sha256 == hashlib.sha256(final_bytes).hexdigest()
+    # Two requests were needed — this is the "genuinely multi-round" part.
+    assert len(fetcher.requests) == 2
+    assert fetcher.requests[0][2]["Range"] == "bytes=10-"
+    assert fetcher.requests[1][2]["Range"] == "bytes=20-"
+
+
+def test_download_tiles_raises_when_resume_never_completes(tmp_path: Path) -> None:
+    """Every attempt reports incomplete (the reported total is never
+    reached) — `download_tiles` must raise a clear, terminal error naming
+    the file and how far it got, not crash on a missing `dest`, and must
+    leave the `.partial` file in place for a future run to continue."""
+    tile = "n38w123"
+    dest = tmp_path / f"USGS_13_{tile}.tif"
+    partial = partial_path_for(dest)
+    partial.write_bytes(b"0123456789")
+
+    # Three attempts, each a 206 that never reaches the reported total of
+    # 1000 bytes.
+    responses = [
+        FetchResponse(
+            status=206,
+            headers={"Content-Range": f"bytes {10 + i * 5}-{14 + i * 5}/1000"},
+            content=b"XXXXX",
+        )
+        for i in range(3)
+    ]
+    fetcher = StubFetcher(responses)
+
+    with pytest.raises(ResumeIncompleteError) as excinfo:
+        download_tiles(fetcher, [tile], dest_dir=tmp_path, max_attempts=3, sleep=_noop_sleep)
+
+    message = str(excinfo.value)
+    assert str(partial) in message
+    assert "3" in message  # attempt count named
+    assert not dest.exists()  # never falsely materialized as "done"
+    assert partial.exists()  # left in place so the next run can continue
+    assert partial.read_bytes() == b"0123456789XXXXXXXXXXXXXXX"  # bytes were still appended
+
+
+def test_download_norcal_extract_304_uses_cache_and_does_not_refetch_checksum(
+    tmp_path: Path,
+) -> None:
+    """`304 Not Modified` -> the cached file is used untouched, and the MD5
+    sidecar is *not* re-fetched — the file was already checksum-verified
+    the run it was downloaded, per `download_norcal_extract`'s own
+    docstring; a 304 is proof nothing about it has changed since."""
+    pbf_path = tmp_path / "norcal-latest.osm.pbf"
+    pbf_path.write_bytes(b"previously verified bytes")
+    meta_path_for(pbf_path).write_text('{"etag": "\\"abc\\"", "last_modified": null}')
+
+    fetcher = StubFetcher([FetchResponse(status=304, headers={}, content=b"")])
+    outcome = download_norcal_extract(fetcher, pbf_path=pbf_path, max_attempts=3, sleep=_noop_sleep)
+
+    assert outcome == DownloadOutcome.NOT_MODIFIED
+    assert pbf_path.read_bytes() == b"previously verified bytes"
+    assert len(fetcher.requests) == 1  # only the conditional GET — no MD5 fetch
+
+
+def test_download_norcal_extract_checksum_mismatch_does_not_leave_a_bad_file_cached(
+    tmp_path: Path,
+) -> None:
+    """A checksum mismatch after a successful download must fail loudly
+    AND must not leave the corrupt file (with its cache meta already
+    written) sitting there looking legitimate — a future run would see the
+    file, send its cached ETag, get a 304 from an unchanged remote, and
+    trust the corrupt bytes forever. A silently-corrupted ~1 GB extract
+    would present as a routing bug, not a data bug."""
+    pbf_path = tmp_path / "norcal-latest.osm.pbf"
+
+    fetcher = StubFetcher(
+        [
+            FetchResponse(status=200, headers={"ETag": '"new-etag"'}, content=b"corrupt bytes"),
+            FetchResponse(status=200, headers={}, content=b"deadbeef  norcal-latest.osm.pbf\n"),
+        ]
+    )
+
+    with pytest.raises(RuntimeError, match="Checksum mismatch"):
+        download_norcal_extract(fetcher, pbf_path=pbf_path, max_attempts=3, sleep=_noop_sleep)
+
+    assert not pbf_path.exists()  # the corrupt file was deleted, not left in place
+    assert not meta_path_for(pbf_path).exists()  # so a later run can't 304 against it

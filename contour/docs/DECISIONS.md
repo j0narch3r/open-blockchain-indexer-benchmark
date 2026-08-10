@@ -1619,3 +1619,54 @@ tests green (113 pre-existing + 26 new), ruff/ruff-format/mypy strict clean acro
 directories these scripts would create are covered by the existing pattern. The committed
 `data/manifest.json` is untouched by this task (still `"source": "fixture"`) — writing to it would
 require actually running `fetch_3dep.py`, which this task deliberately does not do.
+
+## Task 8, fix round 1: bounded multi-round resume; corrupt-checksum cleanup
+
+Review finding: `fetch_3dep.py::download_tiles` hashed `dest` unconditionally rather than the
+actually-returned path, crashing with a confusing `FileNotFoundError` on a `RESUMED_INCOMPLETE`
+outcome (only `.partial` exists then). Underneath that: neither `download_tiles` nor
+`clip_osm.py::download_norcal_extract` ever called the download function more than once, so a
+resume that didn't finish in a single further request — the expected case on a ~1 GB extract or
+~213 MB tile, not an edge case — had no way to actually complete. Resume support that cannot resume
+implies a capability that isn't there.
+
+**Fix.** Added `net_fetch.download_until_complete(fetcher, url, dest_path, *, max_attempts=5,
+backoff_s, sleep)`: loops the existing single-shot `conditional_resumable_download`, retrying only
+on `RESUMED_INCOMPLETE` with exponential backoff (capped at 30s), and raises `ResumeIncompleteError`
+— naming the file, bytes received, and attempt count — once `max_attempts` is exhausted, leaving the
+`.partial` file in place so a later invocation continues it. Both orchestration functions now route
+through this instead of the single-shot call, and both expose `max_attempts`/`sleep` as parameters
+(the latter purely so tests can avoid a real backoff delay). `download_tiles` now hashes
+`result.path`, never the pre-download `dest`.
+
+**Second bug found while fixing the first, not by the review:** `clip_osm.py::_verify_checksum`
+raised on a mismatch but left the corrupt file on disk under its normal name, with a cache-meta
+sidecar already written (the download function writes it on every `200`/`206`, before checksum
+verification runs). A later run would see the file present, send its cached `ETag`, get a `304`
+from an unchanged remote, and trust the corrupt bytes forever — a silently-corrupted ~1 GB extract
+would present as a routing bug, not a data bug. Fixed: on mismatch, both the bad file and its
+`.meta.json` are deleted before raising.
+
+**Alternatives considered:** capping resume attempts by elapsed wall-clock time instead of a count
+(rejected — a count is simpler to reason about and to drive from a test; nothing in the brief or
+finding asked for a time budget). Making the retry loop live inside
+`conditional_resumable_download` itself rather than a separate `download_until_complete` (rejected
+— `conditional_resumable_download`'s single-request-per-call contract is exactly what its own
+existing tests pin, and callers that only ever expect one round — none currently, but the shape is
+worth keeping — shouldn't have to opt out of retrying).
+
+**Coverage.** Added 4 orchestration-level tests (`test_data_scripts.py`, 26 -> 30) that exercise
+`download_tiles`/`download_norcal_extract` directly: a genuinely multi-round resume completing
+across two `206` responses; exhausting `max_attempts` on a resume that never completes (asserts the
+error names the file/attempt count and the `.partial` file survives with the right bytes); a `304`
+using the cache without re-fetching the MD5 sidecar; and a checksum mismatch leaving neither the bad
+file nor its cache meta behind. Verified these are behavioural (not tautological) by temporarily
+stashing just `scripts/fetch_3dep.py` back to its pre-fix state and confirming the `download_tiles`
+tests fail against it, then restoring the fix.
+
+**Minor:** pinned the Valhalla `docker-compose.yml` image tag `latest` -> `3.8.3` (matching
+API_FACTS.md's verified-current Valhalla release), flagged inline that the exact tag string wasn't
+independently re-verified. Copied API_FACTS.md RISK #8 (Valhalla `use_hills` needing
+`additional_data.elevation` at tile-build time, "strongly implied, not verbatim-confirmed") into a
+`docker-compose.yml` comment next to the flag it concerns, since that risk previously existed only
+in a file nobody editing compose would be reading.

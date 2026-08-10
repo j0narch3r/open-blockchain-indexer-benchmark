@@ -42,6 +42,8 @@ from __future__ import annotations
 import hashlib
 import subprocess
 import sys
+import time
+from collections.abc import Callable
 from pathlib import Path
 
 _SCRIPTS_DIR = Path(__file__).resolve().parent
@@ -53,10 +55,12 @@ if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
 from net_fetch import (  # noqa: E402
+    DEFAULT_MAX_RESUME_ATTEMPTS,
     DownloadOutcome,
     Fetcher,
     HttpxFetcher,
-    conditional_resumable_download,
+    download_until_complete,
+    meta_path_for,
     sha256_of,
 )
 
@@ -120,14 +124,28 @@ def download_norcal_extract(
     *,
     pbf_path: Path = DEFAULT_RAW_PBF_PATH,
     pbf_url: str = GEOFABRIK_NORCAL_PBF_URL,
+    max_attempts: int = DEFAULT_MAX_RESUME_ATTEMPTS,
+    sleep: Callable[[float], None] = time.sleep,
 ) -> DownloadOutcome:
     """Fetch (or confirm-cached) the full NorCal extract. Checksum
     verification against the MD5 sidecar is attempted only after a fresh
     download (`DOWNLOADED`/`RESUMED`) — a `NOT_MODIFIED` result means the
-    bytes on disk already matched what a previous run verified."""
-    result = conditional_resumable_download(fetcher, pbf_url, pbf_path)
+    bytes on disk already matched what a previous run verified, so no
+    redundant network fetch of the MD5 sidecar happens on that path.
+
+    Fix round 1: routed through `net_fetch.download_until_complete` (was
+    a single `conditional_resumable_download` call) so a genuinely
+    multi-round resume on a ~1 GB extract can actually finish, up to
+    `max_attempts` tries, instead of resume support that can only ever
+    handle a resume completing in one more request. `sleep` is a parameter
+    (default `time.sleep`) purely so a test can drive a multi-round resume
+    without a real backoff delay.
+    """
+    result = download_until_complete(
+        fetcher, pbf_url, pbf_path, max_attempts=max_attempts, sleep=sleep
+    )
     if result.outcome in (DownloadOutcome.DOWNLOADED, DownloadOutcome.RESUMED):
-        _verify_checksum(fetcher, pbf_path)
+        _verify_checksum(fetcher, result.path)
     return result.outcome
 
 
@@ -143,9 +161,19 @@ def _verify_checksum(fetcher: Fetcher, pbf_path: Path) -> None:
     # algorithm to detect transfer corruption, nothing more.
     actual = hashlib.md5(pbf_path.read_bytes()).hexdigest()
     if actual != expected:
+        # Fix round 1: a corrupt file that fails its checksum must not be
+        # left on disk under its normal name with a cache-meta sidecar
+        # already written (conditional_resumable_download writes it on
+        # every 200/206, before we get a chance to verify) — otherwise the
+        # *next* run sees `pbf_path` exists, sends the cached ETag, the
+        # remote is unchanged, gets a 304, and trusts the corrupt bytes
+        # forever. Delete both the bad file and its cache meta so the next
+        # run is forced to download fresh, never silently truncated.
+        pbf_path.unlink(missing_ok=True)
+        meta_path_for(pbf_path).unlink(missing_ok=True)
         raise RuntimeError(
             f"Checksum mismatch for {pbf_path}: expected {expected}, got {actual}. "
-            f"The download is corrupt or was truncated; delete it and re-run."
+            f"The corrupt file has been deleted; re-run to download fresh."
         )
 
 

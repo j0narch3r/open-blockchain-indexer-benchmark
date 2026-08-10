@@ -44,19 +44,38 @@ services:
     volumes:
       - ./data:/data:ro
 
-  # Valhalla 3.8.3 (.research/API_FACTS.md §3 pinned-versions table), the
-  # second engine behind the same `RoutingEngine` Protocol (Task 13) —
-  # SPEC.md §5.2: "a cheap sanity comparison... also the fallback if
-  # GraphHopper elevation integration fights back."
+  # Valhalla 3.8.3 (.research/API_FACTS.md §3 pinned-versions table, current
+  # release verified 2026-08-09), the second engine behind the same
+  # `RoutingEngine` Protocol (Task 13) — SPEC.md §5.2: "a cheap sanity
+  # comparison... also the fallback if GraphHopper elevation integration
+  # fights back."
   #
-  # RISK not covered by .research/API_FACTS.md (that file verifies
-  # Valhalla's costing options and config *keys*, not a Docker image name —
-  # same class of gap as scripts/clip_osm.py's Geofabrik-URL caveat):
-  # `ghcr.io/valhalla/valhalla:latest` is Valhalla's own documented
-  # maintained image per its GitHub Container Registry listing, not a value
-  # independently re-verified in this session. Pin to an exact digest/tag
-  # before relying on this in CI or production — `latest` here is a
-  # placeholder for a script nobody has run yet.
+  # Image tag pinned to `3.8.3` (fix round 1: was `latest`, which a review
+  # correctly called a contradiction in a pipeline whose entire purpose is
+  # a checksummed, reproducible manifest — `latest` silently drifts under
+  # you). RISK not covered by .research/API_FACTS.md (that file verifies
+  # Valhalla's costing options and config *keys*, not a Docker image tag
+  # naming convention — same class of gap as scripts/clip_osm.py's
+  # Geofabrik-URL caveat): `ghcr.io/valhalla/valhalla` is Valhalla's own
+  # documented maintained image per its GitHub Container Registry listing,
+  # but whether it publishes a tag literally named `3.8.3` (as opposed to,
+  # say, `v3.8.3` or only `latest`/`run-<date>`) was not independently
+  # re-verified in this session — confirm the exact tag exists before the
+  # first real `docker compose --profile engines up valhalla`, and update
+  # this comment with whatever tag actually works.
+  #
+  # RISK (API_FACTS.md RISKS/UNVERIFIED #8, copied here because compose is
+  # the one place someone editing this service is unlikely to be reading
+  # that file): "Valhalla `weighted grade` / elevation ingestion requiring
+  # `additional_data.elevation` to be set at tile-build time for
+  # `use_hills` to have any effect... a very reasonable inference from the
+  # docs... but [API_FACTS.md] did not find an explicit sentence stating
+  # '`use_hills` has zero effect if you didn't build tiles with elevation
+  # data' — treat as strongly implied, not verbatim-confirmed." The command
+  # below does pass `--additional-data-elevation` to `valhalla_build_config`
+  # before `valhalla_build_tiles` runs, on the strength of that inference;
+  # if Valhalla-backed routes come back slope-blind, this is the first
+  # place to check.
   #
   # No custom Dockerfile: the task's file list names only
   # `services/routing-engine/Dockerfile` (GraphHopper). Valhalla's official
@@ -68,7 +87,7 @@ services:
   # (Valhalla's own documented default).
   valhalla:
     profiles: ["engines"]
-    image: ghcr.io/valhalla/valhalla:latest
+    image: ghcr.io/valhalla/valhalla:3.8.3
     ports:
       - "8002:8002"
     volumes:
