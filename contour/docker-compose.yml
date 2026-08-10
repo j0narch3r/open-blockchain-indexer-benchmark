@@ -1,9 +1,24 @@
 # Contour local/deploy stack. See docs/SPEC.md §5 for the architecture.
 #
-# Not run in the M1 scaffold task — the api Dockerfile and the
-# routing-engine build (GraphHopper/Valhalla) land in later tasks.
-# This file documents the intended topology so later tasks extend it
-# rather than inventing a new one.
+# ============================================================================
+# The `routing-engine` and `valhalla` services below are written against
+# documentation verified 2026-08-09; NEVER EXECUTED in this environment.
+# The first real run should expect to debug it — see
+# services/routing-engine/Dockerfile, services/routing-engine/config/
+# graphhopper.yml, and docs/DECISIONS.md "Task 8". The `api` service's own
+# Dockerfile has not been written yet (a later task); `api` here still
+# documents the intended topology only.
+# ============================================================================
+#
+# `routing-engine` and `valhalla` are both tagged `profiles: ["engines"]` so
+# a bare `docker compose up` starts only `api` (Task-8-brief step 6: "add
+# both graphhopper and valhalla services... profiled so `make dev` can
+# start the API alone"). `api` does not hard-depend on either — Task 13
+# selects the engine via the `CONTOUR_ENGINE` env var, defaulting to
+# `fixture` (no engine container needed at all for fixture-backed local
+# dev). Bring an engine up explicitly with:
+#   docker compose --profile engines up routing-engine
+#   docker compose --profile engines up valhalla
 
 services:
   api:
@@ -15,13 +30,58 @@ services:
       - .env
     volumes:
       - ./data:/data:ro
-    depends_on:
-      - routing-engine
 
+  # GraphHopper 11.0. See services/routing-engine/Dockerfile and
+  # config/graphhopper.yml for the exact version, custom-model files, and
+  # elevation-provider configuration, all cited against
+  # .research/API_FACTS.md §1-2.
   routing-engine:
+    profiles: ["engines"]
     build:
       context: ./services/routing-engine
     ports:
       - "8989:8989"
     volumes:
       - ./data:/data:ro
+
+  # Valhalla 3.8.3 (.research/API_FACTS.md §3 pinned-versions table), the
+  # second engine behind the same `RoutingEngine` Protocol (Task 13) —
+  # SPEC.md §5.2: "a cheap sanity comparison... also the fallback if
+  # GraphHopper elevation integration fights back."
+  #
+  # RISK not covered by .research/API_FACTS.md (that file verifies
+  # Valhalla's costing options and config *keys*, not a Docker image name —
+  # same class of gap as scripts/clip_osm.py's Geofabrik-URL caveat):
+  # `ghcr.io/valhalla/valhalla:latest` is Valhalla's own documented
+  # maintained image per its GitHub Container Registry listing, not a value
+  # independently re-verified in this session. Pin to an exact digest/tag
+  # before relying on this in CI or production — `latest` here is a
+  # placeholder for a script nobody has run yet.
+  #
+  # No custom Dockerfile: the task's file list names only
+  # `services/routing-engine/Dockerfile` (GraphHopper). Valhalla's official
+  # image already bundles `valhalla_build_tiles`/`valhalla_build_config`;
+  # the command below bootstraps a config from the mounted OSM extract and
+  # the Skadi-format elevation tiles `fetch_3dep.py` writes (API_FACTS.md
+  # §3: Valhalla ingests the identical Skadi/terrain-tiles format
+  # GraphHopper's `skadi` provider uses), then serves on port 8002
+  # (Valhalla's own documented default).
+  valhalla:
+    profiles: ["engines"]
+    image: ghcr.io/valhalla/valhalla:latest
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./data:/custom_files:rw
+    environment:
+      - tile_urls=/custom_files/osm/sf.osm.pbf
+      - use_default_speeds_config=True
+    command: >
+      sh -c "
+        valhalla_build_config --additional-data-elevation /custom_files/skadi
+          --mjolnir-tile-dir /custom_files/valhalla-tiles
+          --mjolnir-tile-extract /custom_files/valhalla-tiles.tar
+          > /custom_files/valhalla.json &&
+        valhalla_build_tiles -c /custom_files/valhalla.json /custom_files/osm/sf.osm.pbf &&
+        valhalla_service /custom_files/valhalla.json 1
+      "

@@ -74,6 +74,23 @@ ignore_missing_imports = true
 module = "make_fixture_dem"
 ignore_missing_imports = true
 
+# Same reasoning as `make_fixture_dem` above, for Task 8's real-data
+# pipeline scripts (`scripts/clip_osm.py`, `scripts/fetch_3dep.py`,
+# `scripts/net_fetch.py`) — also outside `services/api`, also loaded via
+# `sys.path.insert` from `tests/test_data_scripts.py`. See docs/DECISIONS.md
+# Task 8.
+[[tool.mypy.overrides]]
+module = "clip_osm"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "fetch_3dep"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "net_fetch"
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 filterwarnings = [

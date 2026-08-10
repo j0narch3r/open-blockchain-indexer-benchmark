@@ -1,0 +1,88 @@
+# GraphHopper 11.0 configuration for Contour's SF bicycle routing.
+#
+# ============================================================================
+# Written against documentation verified 2026-08-09; NEVER EXECUTED. The
+# first real run should expect to debug it. Verify tile availability,
+# checksum behaviour, and GraphHopper graph-build memory before trusting
+# output. See contour/.research/API_FACTS.md and docs/DECISIONS.md.
+# ============================================================================
+#
+# Version and every key below are taken from contour/.research/API_FACTS.md
+# §1-2, verified 2026-08-09 directly against the GraphHopper 11.0 source
+# (github.com/graphhopper/graphhopper, tag matching the 2025-10-14 release)
+# and its shipped `config-example.yml` / `docs/core/elevation.md` — NOT from
+# training-data memory, per Global Constraints and SPEC.md §9.5.
+#
+# Elevation provider: `skadi`. SPEC.md §4.3 step 3 explicitly flagged this
+# as needing verification before committing to it ("Valhalla consumes Skadi
+# natively; GraphHopper has a Skadi elevation provider — verify this
+# against the current GraphHopper release before committing to it"). It is
+# verified: `SkadiProvider` is live in the GraphHopper 11.0/master source
+# (core/src/main/java/com/graphhopper/reader/dem/SkadiProvider.java) even
+# though the hosted prose docs (docs/core/elevation.md) omit it from their
+# provider list — API_FACTS.md flags this exact docs/code drift and trusts
+# the source. No fallback (pre-tagging OSM `ele` nodes, or a custom
+# ElevationProvider) is needed.
+#
+# `graph.elevation.cache_dir` points at the Skadi tiles `fetch_3dep.py`
+# generates from Contour's own 3DEP-derived DEM (SPEC.md §4.3 step 3), not
+# the public 30 m elevation-tiles-prod mirror — SkadiProvider checks its
+# cache_dir before hitting the network, so a fully pre-seeded cache_dir
+# means graph build never needs outbound access for elevation at all. This
+# specific claim ("SkadiProvider prefers an already-present same-named
+# cache file over a network fetch, and expects it gzipped and named exactly
+# as `fetch_3dep.py::write_skadi_tile` writes it") is standard
+# AbstractSRTMElevationProvider behaviour but was NOT independently
+# re-derived from that class's source in this session — API_FACTS.md only
+# quotes SkadiProvider's *download* URL/cache-file-naming, not its cache-hit
+# code path line-by-line. Flagged as a risk beyond API_FACTS.md's own
+# UNVERIFIED list; check `AbstractSRTMElevationProvider.java` before trusting
+# the pre-seeded cache to avoid a network call.
+
+graph.location: /data/graph-cache
+datareader.file: /data/osm/sf.osm.pbf
+
+# --- Elevation (API_FACTS.md §1-2) ------------------------------------------
+graph.elevation.provider: skadi
+graph.elevation.cache_dir: /data/skadi
+graph.elevation.dataaccess: RAM
+graph.elevation.clear: false # cache_dir is pre-seeded from our own 3DEP DEM, not scratch space
+graph.elevation.interpolate: bilinear
+graph.elevation.edge_smoothing: ramer
+graph.elevation.long_edge_sampling_distance: 60
+graph.elevation.way_point_max_distance: 10
+
+# `graph.encoded_values` and `profiles.custom_model_files` below follow the
+# exact recipe quoted verbatim in the code comment shipped with
+# GraphHopper's own `bike.json` custom model (API_FACTS.md §1, "the exact
+# code comment that ships with bike.json gives the required config
+# recipe"), substituting `skadi` for that comment's `srtm` (our deliberate
+# choice, justified above) and adding `max_slope` (NOT present in the
+# quoted recipe itself, but independently source-verified as a real,
+# elevation-backed encoded value in the same GraphHopper release —
+# API_FACTS.md §1's "Slope-related encoded values" table — and needed here
+# because design doc §5.2 names *both* `average_slope`/`max_slope` as the
+# reason GraphHopper was chosen: "direct, declarative control over the
+# slope/distance tradeoff". This one addition is flagged explicitly because
+# everything else on this line is copy-verified, not inferred.
+graph.encoded_values: bike_priority, bike_access, bike_network, roundabout, bike_average_speed, bike_road_access, foot_road_access, average_slope, max_slope, mtb_rating, hike_rating, country, road_class, ferry_speed
+
+profiles:
+  - name: bike
+    custom_model_files: [bike.json, bike_avoid_private_node.json, bike_elevation.json]
+
+# CH is deliberately NOT declared for the `bike` profile. Contour's ranker
+# (Stage A, design doc §3.5) sends a per-request `custom_model` with a
+# `slope_weight`-derived priority term for every candidate — a per-request
+# custom_model requires `ch.disable: true` on each request (API_FACTS.md
+# §1, verified from GraphHopper's own custom-model regression tests), and
+# CH only pre-computes shortcuts for one fixed weighting anyway. Declaring
+# a `profiles_ch` entry here would build shortcuts this service can never
+# use, for no benefit and real graph-build memory cost.
+
+# Alternative-route tuning (API_FACTS.md §1) — Stage A asks for N=6-10
+# diverse candidates (design doc §3.5); GraphHopper's own
+# `alternative_route.max_paths` default is 2, so the engine adapter
+# (services/api/contour/engines/graphhopper.py, Task 13) must override it
+# per-request. Left at GraphHopper's defaults here; not a server-wide
+# config key.

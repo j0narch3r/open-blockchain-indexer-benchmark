@@ -1477,3 +1477,145 @@ state machine). Computing `windowed_grades` from the true per-sample cumulative-
 instead of a scalar `spacing_m` (rejected — the interface is locked for Task 7/Task 12; documented
 as a known, small, deliberately-accepted imprecision above rather than a silent deviation from the
 brief's signature).
+
+## Task 8: Real OSM/3DEP data pipeline (written, never executed)
+
+**Status: written and unit-tested, deliberately never run.** Every claim below about what this
+pipeline *would* do is a claim about code that has never touched the network in this environment.
+The banner at the top of `scripts/clip_osm.py`, `scripts/fetch_3dep.py`, `scripts/net_fetch.py`,
+`services/routing-engine/Dockerfile`, and `services/routing-engine/config/graphhopper.yml` says so
+verbatim: *"Written against documentation verified 2026-08-09; NEVER EXECUTED. The first real run
+should expect to debug it. Verify tile availability, checksum behaviour, and GraphHopper graph-build
+memory before trusting output."*
+
+**GraphHopper version and config keys targeted (SPEC.md §9.5 requirement).** GraphHopper **11.0**
+(released 2025-10-14), verified via `github.com/graphhopper/graphhopper` releases + `pom.xml` on
+2026-08-09 — `.research/API_FACTS.md` pinned-versions table. Config keys, all copied from that same
+file (§1-2), which itself cites GraphHopper's own source
+(`core/src/main/java/com/graphhopper/reader/dem/SkadiProvider.java`,
+`core/src/main/java/com/graphhopper/GraphHopper.java`) and shipped resources
+(`core/src/main/resources/com/graphhopper/custom_models/bike.json`,
+`.../bike_elevation.json`), dated 2026-08-09:
+- `graph.elevation.provider: skadi` — SPEC.md §4.3 step 3 explicitly named this as needing
+  verification before use ("verify this against the current GraphHopper release before committing
+  to it"); it is verified live in the 11.0/master source even though the hosted prose docs
+  (`docs/core/elevation.md`) omit `skadi` from their provider list entirely — a docs/code drift
+  API_FACTS.md flags by name. No fallback (pre-tagging OSM `ele` nodes, or a custom
+  `ElevationProvider`) was needed.
+- `graph.elevation.cache_dir`, `graph.elevation.dataaccess: RAM`, `graph.elevation.interpolate:
+  bilinear`, `graph.elevation.edge_smoothing: ramer`, `graph.elevation.long_edge_sampling_distance:
+  60`, `graph.elevation.way_point_max_distance: 10` — verified in GraphHopper's own
+  `config-example.yml`.
+- `graph.encoded_values` and `profiles[].custom_model_files` — copied from the exact code comment
+  shipped with `bike.json` itself, substituting `srtm` -> `skadi` and adding `max_slope` (flagged
+  inline in `graphhopper.yml` as the one line-item not present in that verbatim comment, added
+  because design doc §5.2 names both `average_slope` and `max_slope` as the reason GraphHopper was
+  chosen over a generic router).
+- Per-request `custom_model` + `"ch.disable": true` — verified from GraphHopper's own
+  `RouteResourceCustomModelTest.java`; documented in `graphhopper.yml` as the reason no CH profile
+  is declared (a per-request slope-weighted `custom_model`, which Stage A needs per candidate, is
+  incompatible with CH's single fixed weighting).
+
+**UNVERIFIED items touched, and how each was handled** (cross-referencing `.research/API_FACTS.md`'s
+own numbered RISKS/UNVERIFIED list):
+1. **#2 (elevation-provider docs/code drift):** not a risk to route around — it is the resolution.
+   Trusted the source (`GraphHopper.java`'s provider switch) over the prose docs, exactly as
+   API_FACTS.md itself recommends.
+2. **#7 (3DEP GeoTIFFs being true COGs, unverified):** not load-bearing. `fetch_3dep.py` reads
+   source tiles with `rasterio`/GDAL, which handles COG and plain GeoTIFF identically; if the source
+   tiles turn out not to be COGs, the only effect is losing an unattempted read-directly-from-S3
+   optimization, not correctness.
+3. Two additional gaps **beyond** API_FACTS.md's own 7-item list surfaced while writing this task,
+   both flagged inline at the point they matter rather than silently assumed:
+   - **Geofabrik's NorCal extract URL** (`scripts/clip_osm.py` module docstring) is not covered by
+     API_FACTS.md at all — Global Constraints names GraphHopper/Valhalla/MapLibre RN/Expo/pmtiles/
+     3DEP as the APIs that file verifies; Geofabrik isn't one of them. The URL used
+     (`download.geofabrik.de/north-america/us/california/norcal-latest.osm.pbf`) is Geofabrik's
+     long-standing public path convention, not independently re-verified this session. Same
+     honesty standard applied to the MD5-sidecar convention (`<file>.md5`) and to the Valhalla
+     Docker image reference in `docker-compose.yml` (`ghcr.io/valhalla/valhalla:latest` — Valhalla's
+     costing options and config *keys* are verified in API_FACTS.md §3, its Docker image name is
+     not).
+   - **GraphHopper `SkadiProvider`'s exact local-cache-hit behaviour when `cache_dir` is
+     pre-seeded** (does it prefer an already-present same-named file over a network fetch, gzipped
+     or raw, flat or nested under a lat-prefixed subdirectory?) is not derived from source in this
+     session — API_FACTS.md §2 quotes `SkadiProvider`'s *download* URL and cache-filename
+     convention (`"Local cache filename is the same string lower-cased (n37w123)"`) but not
+     `AbstractSRTMElevationProvider`'s cache-hit code path line-by-line. `fetch_3dep.py::
+     write_skadi_tile` follows the one directly-quoted convention (lower-cased, flat, `.hgt.gz`)
+     as its best-effort implementation, and `graphhopper.yml` flags the gap explicitly right next
+     to `graph.elevation.cache_dir` so it's the first thing checked if graph build tries to hit the
+     network for elevation despite a pre-seeded cache.
+
+**Manifest shape — same keys as the fixture manifest, real-appropriate values, not a schema
+fork.** Task-8-brief: *"match it — same keys, same hashing approach — so `/v1/health` and the eval
+harness work unchanged against either."* `fetch_3dep.py::_manifest_dict` emits every key
+`scripts/make_fixture_dem.py::write_manifest` does (pinned by
+`test_manifest_key_set_matches_the_fixture_manifest_shape`), with the four fixture-specific
+interpolation-provenance fields given their honest real-pipeline value rather than omitted:
+`clamped_pixel_count`/`in_hull_clamped_pixel_count` are always `0` (a real 3DEP mosaic has no RBF
+extrapolation step to clamp), `in_hull_pixel_count` equals `total_pixel_count` (no "convex hull of
+sparse control points" concept applies to directly-surveyed data), and
+`interpolation_smoothing`/`interpolation_neighbors` are always `null` (no RBF fit happens).
+`control_point_sha256`/`control_point_count` are repurposed to the same *structural* role
+("hash + count of what fed the DEM") applied to this pipeline's actual input: the sorted set of
+3DEP tile ids and their own file hashes, instead of a control-point CSV. Two additive keys not in
+the fixture manifest (`source_tiles`, `source_tile_urls`) carry real-only provenance; adding keys
+is safe for any consumer reading by name, never a subset of the fixture's shape. `"source": "real"`
+is hardcoded, never derived, so it can't silently drift to match `"fixture"`.
+
+**Alternatives considered:**
+- *Folding manifest-writing into a shared module with `make_fixture_dem.py`* (rejected — that
+  script is fixture-only tooling per its own docstring; this real pipeline should not import it or
+  be imported by it, so the manifest-dict-building logic is duplicated in shape but independent in
+  code, same pattern as `write_cog`).
+- *`pyosmium` instead of shelling out to the `osmium` CLI* (rejected — adds a new Python dependency
+  needing its own justification here; `osmium-tool` is already the natural fit baked into
+  `services/routing-engine/Dockerfile`'s image, so `clip_osm.py` shells out to it and no Python
+  dependency is added).
+- *A single combined script instead of `clip_osm.py` + `fetch_3dep.py` + shared `net_fetch.py`*
+  (rejected — the brief names two separate scripts; `net_fetch.py` was added, not in the brief's
+  file list, purely to avoid duplicating the conditional-request/resume/rate-limit logic both need
+  identically — this is implementation detail behind the two named entry points, not new scope).
+- *Making `make data` a no-op/print-only stub, matching how it read before this task* (rejected —
+  the task is to *write* the real pipeline, not to describe it; `make data` now genuinely invokes
+  `clip_osm.py`/`fetch_3dep.py`, still gated by the fact that nobody runs `make data` in this
+  environment, per the global constraint that fixtures are the only data path CI or `make verify`
+  ever touches).
+- *Fully containerizing `clip_osm.py`/`fetch_3dep.py` themselves* (SPEC.md §4.3's "all
+  containerized" framing) — considered and scoped down: `osmium-tool` lives in the
+  `routing-engine` image so its binary is available somewhere, but the two Python scripts still run
+  via `uv run` against `services/api`'s own environment (they need `contour.constants`/
+  `contour.errors` and the project's `rasterio`/`httpx`), documented as a host-level prerequisite in
+  the `Makefile`'s `data` target comment rather than built out as its own Docker image — a fully
+  containerized data-prep step felt like scope the never-executed nature of this task doesn't
+  justify building blind.
+
+**TDD evidence.** `services/api/tests/test_data_scripts.py`, 26 tests, all written and run red
+(`ModuleNotFoundError` before `scripts/net_fetch.py`/`clip_osm.py`/`fetch_3dep.py` existed) then
+green: 3DEP tile-name computation for `SF_BBOX` (`n38w123`, matching API_FACTS.md §7's directly
+verified live-bucket-listing example) and three bbox-spanning-a-boundary cases (longitude,
+latitude, and both at once — one, two, two, four tiles respectively); the 3DEP<->Skadi tile-name
+conversion against the one directly-quoted example (`n38w123` <-> `N37W123`); manifest-checksum
+stability (identical inputs -> identical `manifest_sha256`, changing one input changes it, the key
+set matches the fixture manifest, the clamp/interpolation fields read their honest real-pipeline
+value); the bbox out-of-service-area guard (`validate_service_area_bbox` raises `OutOfServiceArea`
+with code `OUT_OF_SERVICE_AREA` for a bbox outside SF and for one that only partially exceeds it);
+and the conditional/resume download control flow against a stub `Fetcher` — 304 uses the cache
+untouched and sends the cached `If-None-Match`/`If-Modified-Since`, 200 overwrites and re-caches,
+a fresh 206 append-and-rename completes the file (proven by asserting the final bytes are
+`partial + new`, not just `new`), a `Content-Range`-reported incomplete resume stays a `.partial`
+file rather than being prematurely renamed, and both a 304-with-no-cached-file and an unsolicited
+206 raise `UnexpectedStatusError`. No test opens a socket — every network-shaped input is a
+pre-programmed `StubFetcher` implementing `net_fetch.Fetcher` structurally. `make verify`: 139
+tests green (113 pre-existing + 26 new), ruff/ruff-format/mypy strict clean across
+`services/api/`. `scripts/*.py` are outside `make verify`'s scope (same as the pre-existing
+`make_fixture_dem.py`/`cv_sweep.py`), so they were additionally checked by hand:
+`ruff check`/`ruff format --check` clean and `mypy --strict` clean (with `MYPYPATH` pointed at
+`services/api` so `contour.*` resolved instead of falling back to `Any`).
+
+**Data manifest / gitignore:** no change needed — `data/**` is already gitignored except
+`data/manifest.json` and `data/fixtures/**`, so the new `data/raw/`, `data/osm/`, `data/skadi/`
+directories these scripts would create are covered by the existing pattern. The committed
+`data/manifest.json` is untouched by this task (still `"source": "fixture"`) — writing to it would
+require actually running `fetch_3dep.py`, which this task deliberately does not do.

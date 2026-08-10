@@ -29,3 +29,12 @@ Good ideas that are out of scope for the current task. Append, don't implement.
   on real street geometry once the fixture graph (a later task) exists, or if someone wants to
   investigate why a local fit didn't tame the in-hull oscillation the way a smaller neighborhood
   was expected to.
+- **Real 3DEP pipeline: upgrade from 1/3 arc-second to 1 m lidar (Task 8).** `scripts/fetch_3dep.py`
+  implements only the 1/3 arc-second (~10 m) source (SPEC.md §4.1's stated minimum); the 1 m lidar
+  project covering SF (`CA_SanFrancisco_B23`, 4 tiles, ~500 MB total) is verified reachable in
+  `.research/API_FACTS.md` §7 but not wired up — SPEC §4.1 calls it "preferred where available."
+  Left out because this task's real pipeline has never been executed even once at the smaller
+  resolution; adding a second, larger, four-tile mosaic path with no real run to validate either
+  felt like more unverified surface than the task should add. Whoever runs `make data` for the
+  first time should verify the 1/3 arc-second result is good enough before spending the extra
+  ~300 MB and mosaic complexity on the lidar upgrade.
