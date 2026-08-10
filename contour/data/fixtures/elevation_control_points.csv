@@ -115,7 +115,7 @@ Hayes St and Steiner St,37.776500,-122.433500,73.0,control,estimated from surrou
 Fulton St and Scott St,37.776800,-122.437000,68.0,control,estimated from surrounding terrain,medium
 Divisadero St and Grove St,37.774500,-122.437600,65.0,control,estimated from surrounding terrain,medium
 Filbert St and Hyde St,37.800200,-122.419300,96.0,control,derived: comparable to sourced Lombard and Hyde elevation (325 ft) one block north on same ridge; see docs/DECISIONS.md Task 4 fix round 2,low
-Filbert St and Leavenworth St,37.800200,-122.417900,56.4,control,derived: Filbert and Hyde estimate minus 31.5% grade (Lonely Planet/Secret SF) x 412.5 ft sourced block length,medium
+Filbert St and Leavenworth St,37.800200,-122.417900,56.4,control,derived: Filbert and Hyde estimate minus 31.5% grade (Lonely Planet/Secret SF) x 412.5 ft sourced block length; the Hyde anchor it is derived from is itself low confidence,low
 Lombard St and Hyde St (crooked block top),37.801700,-122.419300,99.1,control,multiple travel sources (mikesroadtrip.com roadsideamerica.com) cite 325 ft at crooked block top,medium
 Lombard St and Leavenworth St (crooked block bottom),37.801700,-122.417900,68.6,control,derived: 325 ft top minus widely-cited 100 ft vertical drop over the switchbacks,medium
 Duboce Ave and Church St,37.769500,-122.429100,27.0,control,estimated from surrounding terrain near Duboce/Church rail junction; coordinates from Wikipedia Duboce and Church station,low
@@ -124,6 +124,104 @@ Pierce St and Haight St,37.771700,-122.434000,35.0,control,estimated from surrou
 Scott St and Fell St,37.772000,-122.437000,42.0,control,estimated from surrounding terrain: Wiggle corridor approaching Panhandle,low
 Buena Vista Ave East at Duboce (park east base),37.769000,-122.438000,50.0,control,estimated from surrounding terrain: park east base,low
 Buena Vista Ave West near Haight (park west base),37.767600,-122.443000,65.0,control,estimated from surrounding terrain: park west base,low
-Corona Heights base (16th St and Flint St),37.762100,-122.438100,91.0,control,base of hill cited ~300 ft (Roadtrippers/Apple Maps aggregation),medium
+Corona Heights base (16th St and Flint St),37.762100,-122.438100,91.0,control,base of hill cited ~300 ft (Roadtrippers/Apple Maps aggregation - a maps aggregator not a survey),low
 Twin Peaks Blvd near Christmas Tree Point,37.756800,-122.446800,260.6,control,SF Standard: ~70 ft below Eureka Peak's 925 ft summit,medium
 Twin Peaks Blvd upper south switchback,37.753800,-122.447800,248.0,control,estimated from surrounding terrain: upper approach to south peak,low
+McLaren Park summit (near the water tower),37.718500,-122.418500,158.2,control,PeakVisor: John McLaren Park high point 519 ft,medium
+McLaren Park Mansell St crest,37.721500,-122.416000,132.0,control,estimated from surrounding terrain,low
+McLaren Park south flank (Visitacion Ave),37.714500,-122.416500,108.0,control,estimated from surrounding terrain,low
+McLaren Park east flank (Hahn St),37.716000,-122.411000,85.0,control,estimated from surrounding terrain,low
+McLaren Park west flank (University St),37.721500,-122.423500,95.0,control,estimated from surrounding terrain,low
+Excelsior (Mission St and Geneva Ave),37.720000,-122.440000,68.0,control,estimated from surrounding terrain; nearby Excelsior Station (GNIS) cited at 51 m,low
+Excelsior (Mission St and Silver Ave),37.728500,-122.433500,52.0,control,estimated from surrounding terrain,low
+Excelsior crest (Persia Ave and Naples St),37.721500,-122.431000,92.0,control,estimated from surrounding terrain,low
+Crocker-Amazon (Geneva Ave and Prague St),37.713000,-122.433500,72.0,control,estimated from surrounding terrain,low
+Crocker Amazon Playground (Moscow St),37.709500,-122.439000,88.0,control,estimated from surrounding terrain,low
+Visitacion Valley (Leland Ave and Bayshore Blvd),37.711500,-122.405500,10.0,control,estimated from surrounding terrain; topozone cites Visitacion Valley ~16 ft,low
+Visitacion Valley slope (Raymond Ave and Rutland St),37.711500,-122.413000,38.0,control,estimated from surrounding terrain,low
+Little Hollywood (Bayshore Blvd and Tunnel Ave),37.708500,-122.399000,6.0,control,estimated from surrounding terrain,low
+Bayview Hill summit,37.717500,-122.390500,129.5,control,Wikipedia/AllTrails: Bayview Hill (Candlestick Hill) 425 ft,medium
+Bayview Park south slope,37.713800,-122.390200,111.9,control,topozone: Bayview Park 367 ft,medium
+Bayview Hill north base (Gilman Ave and Griffith St),37.720500,-122.386500,7.0,control,estimated from surrounding terrain,low
+Silver Terrace (Silver Ave and Bayshore Blvd),37.735500,-122.403000,32.0,control,estimated from surrounding terrain,low
+Portola (Mansell St and San Bruno Ave),37.725500,-122.404500,58.0,control,estimated from surrounding terrain,low
+University Mound Reservoir (Bacon St and University St),37.728000,-122.411000,85.0,control,estimated from surrounding terrain,low
+Hunters Point Hill (Whitney Young Circle),37.734500,-122.380500,38.1,control,USGS 125 ft as cited by urbanlifesigns Forgotten Hills; not independently confirmed,low
+India Basin shoreline (Hunters Point Blvd),37.737000,-122.379000,3.0,control,estimated from surrounding terrain,low
+Oceanview (Broad St and Plymouth Ave),37.717500,-122.456000,68.0,control,estimated from surrounding terrain,low
+Merced Heights (Shields St and Orizaba Ave),37.714500,-122.464000,118.0,control,estimated from surrounding terrain,low
+Ingleside (Ocean Ave and Ashton Ave),37.724500,-122.458500,62.0,control,estimated from surrounding terrain,low
+Ingleside Terraces (Urbano Dr sundial),37.725500,-122.467000,85.0,control,estimated from surrounding terrain,low
+Sunnyside (Monterey Blvd and Ridgewood Ave),37.731500,-122.448500,100.0,control,estimated from surrounding terrain,low
+Mission Terrace (Alemany Blvd and Onondaga Ave),37.728000,-122.438000,32.0,control,estimated from surrounding terrain,low
+Glen Canyon Park ridge (Turquoise Way),37.739500,-122.442500,145.0,control,estimated from surrounding terrain,low
+Sutro Tower base,37.755200,-122.452800,254.2,control,Sutro Tower official site and Wikipedia: tower base 834 ft above mean sea level,high
+Clarendon Ave and Panorama Dr,37.754800,-122.457500,175.0,control,estimated from surrounding terrain,low
+Midtown Terrace (Olympia Way and Marview Way),37.751500,-122.453500,210.0,control,estimated from surrounding terrain,low
+Laguna Honda Blvd and Clarendon Ave,37.749500,-122.457000,128.0,control,estimated from surrounding terrain,low
+Laguna Honda Reservoir,37.747000,-122.454500,112.0,control,estimated from surrounding terrain,low
+Portola Dr and Woodside Ave,37.743000,-122.453000,110.0,control,estimated from surrounding terrain,low
+Portola Dr and Twin Peaks Blvd,37.746500,-122.445500,165.0,control,estimated from surrounding terrain,low
+Forest Hill station (Laguna Honda Blvd and Dewey Blvd),37.747000,-122.466500,108.0,control,estimated from surrounding terrain,low
+West Portal (Ulloa St and West Portal Ave),37.740200,-122.468000,72.0,control,estimated from surrounding terrain,low
+Edgehill Mountain summit,37.742000,-122.464000,223.7,control,Wikipedia: Edgehill Mountain 734 ft (224 m),medium
+Miraloma Park (Portola Dr and Fowler Ave),37.739500,-122.452000,158.0,control,estimated from surrounding terrain,low
+Mount Olympus (Upper Terrace),37.758000,-122.440700,168.6,control,Wikipedia: Mount Olympus San Francisco 553 ft (169 m),medium
+Taraval St and 19th Ave,37.742500,-122.477000,26.0,control,estimated from surrounding terrain,low
+Taraval St and 30th Ave,37.742500,-122.488500,20.0,control,estimated from surrounding terrain,low
+Judah St and 30th Ave,37.760500,-122.489000,18.0,control,estimated from surrounding terrain,low
+Judah St and 40th Ave,37.760500,-122.498000,12.0,control,estimated from surrounding terrain,low
+Noriega St and 43rd Ave,37.754000,-122.503000,9.0,control,estimated from surrounding terrain,low
+Sloat Blvd and 34th Ave,37.735000,-122.493000,12.0,control,estimated from surrounding terrain,low
+Great Hwy and Sloat Blvd,37.735000,-122.507500,5.0,control,estimated from surrounding terrain,low
+Great Hwy and Noriega St,37.754000,-122.510000,4.0,control,estimated from surrounding terrain,low
+Lake Merced water surface (north lake),37.728500,-122.493000,4.9,control,topozone/USGS topo cites ~16 ft; SFPUC records show a 3-27 ft historic range,low
+Harding Park (Skyline Blvd),37.721500,-122.495500,10.0,control,estimated from surrounding terrain,low
+SF State (19th Ave and Holloway Ave),37.721500,-122.479000,58.0,control,estimated from surrounding terrain,low
+Fort Funston bluff (Skyline Blvd),37.716000,-122.503000,58.0,control,estimated from surrounding terrain,low
+Presidio Arguello Blvd at Washington Blvd (Inspiration Point ridge),37.793500,-122.458500,85.0,control,estimated from surrounding terrain; consistent with the Trailforks-sourced Presidio Inspiration Point row 512 m south on the same ridge,low
+Presidio Main Post parade ground,37.798200,-122.459200,32.0,control,estimated from surrounding terrain: a terrace above Crissy Field well below the Presidio ridge,low
+Golden Gate Bridge toll plaza,37.807000,-122.475000,70.0,control,estimated from surrounding terrain,low
+Presidio Crissy Field,37.804500,-122.465000,3.0,control,estimated from surrounding terrain,low
+Baker Beach,37.793500,-122.484000,3.0,control,estimated from surrounding terrain,low
+Lincoln Blvd above Baker Beach,37.790000,-122.484500,62.0,control,estimated from surrounding terrain,low
+Presidio Rob Hill (Washington Blvd west),37.790500,-122.478500,88.0,control,estimated from surrounding terrain,low
+Presidio Public Health Service Hospital (Wedemeyer St),37.786500,-122.470500,100.0,control,estimated from surrounding terrain,low
+Sea Cliff (El Camino del Mar and 25th Ave),37.787000,-122.488500,45.0,control,estimated from surrounding terrain,low
+Lincoln Park (Legion of Honor),37.784500,-122.500500,62.0,control,estimated from surrounding terrain,low
+Sutro Heights Park,37.779500,-122.511000,55.0,control,estimated from surrounding terrain,low
+Point Lobos Ave at Great Hwy,37.778500,-122.513500,28.0,control,estimated from surrounding terrain,low
+Outer Richmond (Balboa St and 40th Ave),37.776000,-122.500000,24.0,control,estimated from surrounding terrain,low
+Outer Richmond (Geary Blvd and 32nd Ave),37.780000,-122.491500,38.0,control,estimated from surrounding terrain,low
+Outer Richmond (Fulton St and 43rd Ave),37.771500,-122.504500,14.0,control,estimated from surrounding terrain,low
+Presidio Heights (California St and Presidio Ave),37.787000,-122.447000,88.0,control,estimated from surrounding terrain,low
+SF Bay open water east of Treasure Island (anchor),37.830000,-122.360000,0.0,control,sea level by definition,high
+SF Bay open water off Yerba Buena Island (anchor),37.815000,-122.355000,0.0,control,sea level by definition,high
+SF Bay open water east of the Ferry Building (anchor),37.795000,-122.360000,0.0,control,sea level by definition,high
+SF Bay open water east of Mission Bay (anchor),37.775000,-122.360000,0.0,control,sea level by definition,high
+SF Bay open water east of Islais Creek (anchor),37.755000,-122.362000,0.0,control,sea level by definition,high
+SF Bay open water east of Hunters Point (anchor),37.735000,-122.362000,0.0,control,sea level by definition,high
+SF Bay open water south of Candlestick Point (anchor),37.715000,-122.368000,0.0,control,sea level by definition,high
+SF Bay open water off the Embarcadero piers (anchor),37.805000,-122.390000,0.0,control,sea level by definition,high
+SF Bay open water off Rincon Point (anchor),37.785000,-122.380000,0.0,control,sea level by definition,high
+SF Bay open water off Pier 80 (anchor),37.765000,-122.375000,0.0,control,sea level by definition,high
+SF Bay open water north of Fishermans Wharf (anchor),37.820000,-122.410000,0.0,control,sea level by definition,high
+SF Bay open water north of the Marina (anchor),37.828000,-122.440000,0.0,control,sea level by definition,high
+Golden Gate strait open water north of the bridge (anchor),37.828000,-122.470000,0.0,control,sea level by definition,high
+Pacific Ocean off Lands End (anchor),37.815000,-122.505000,0.0,control,sea level by definition,high
+Pacific Ocean west of the Richmond (anchor),37.790000,-122.525000,0.0,control,sea level by definition,high
+Pacific Ocean west of Ocean Beach (anchor),37.760000,-122.528000,0.0,control,sea level by definition,high
+Pacific Ocean west of the Sunset (anchor),37.730000,-122.525000,0.0,control,sea level by definition,high
+Pacific Ocean off Fort Funston (anchor),37.705000,-122.515000,0.0,control,sea level by definition,high
+Columbus Ave and Union St (North Beach valley),37.800000,-122.409000,15.0,control,estimated from surrounding terrain: the saddle between Telegraph Hill and Russian Hill,low
+Bay St and Columbus Ave,37.805500,-122.414500,8.0,control,estimated from surrounding terrain,low
+Aquatic Park (Beach St and Hyde St),37.807000,-122.421000,4.0,control,estimated from surrounding terrain,low
+Fishermans Wharf (Jefferson St and Taylor St),37.808500,-122.415500,3.0,control,estimated from surrounding terrain,low
+Chestnut St and Van Ness Ave,37.802200,-122.424500,12.0,control,estimated from surrounding terrain,low
+Polk St and Union St,37.798500,-122.422000,30.0,control,estimated from surrounding terrain,low
+Broadway and Columbus Ave (Broadway tunnel east portal),37.798000,-122.407500,12.0,control,estimated from surrounding terrain,low
+Montgomery St and Broadway (Jackson Square),37.798000,-122.403000,8.0,control,estimated from surrounding terrain,low
+Bay St and Van Ness Ave,37.804500,-122.423500,6.0,control,estimated from surrounding terrain,low
+Geary Blvd and 20th Ave,37.780500,-122.479000,42.0,control,estimated from surrounding terrain: between the sourced Geary/Park Presidio and Balboa/25th Ave rows,low
+Golden Gate strait open water west of the bridge (anchor),37.820000,-122.485000,0.0,control,sea level by definition,high
+SF Bay open water off Fort Point (anchor),37.825000,-122.460000,0.0,control,sea level by definition,high

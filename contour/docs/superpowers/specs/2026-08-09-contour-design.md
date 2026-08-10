@@ -57,22 +57,28 @@ Consequences, stated honestly:
 
 **This gate catches gross breakage — a flipped axis, a units error, a broken sampler — and certifies nothing about accuracy.** The fixture DEM cannot certify accuracy at any tolerance. The 3DEP run is the accuracy gate and it has not been run.
 
-### 2.3.1 Known defect: the DEM is only San Francisco where it is sampled
+### 2.3.1 Fixed (fix round 4): the DEM was only San Francisco where it was sampled
 
-Task 4's independent review established that outside the well-sampled central corridor, this DEM is **not** the city:
+Task 4's independent review established that outside the well-sampled central corridor, this DEM was **not** the city:
 
-| Location | Real | DEM |
-|---|---:|---:|
-| McLaren Park summit | ~170 m | **0.0** |
-| Excelsior (Mission @ Geneva) | ~70 m | **0.0** |
-| Presidio, Inspiration Point | ~95 m | **0.0** |
-| Bayview Hill summit | ~130 m | 12.4 |
-| Open SF Bay water | 0 m | **33–50** |
-| Portola Dr @ Woodside | ~90–130 m | 224.0 |
+| Location | Real | DEM before | DEM after |
+|---|---:|---:|---:|
+| McLaren Park summit | ~158–170 m | **0.0** | 156.9 |
+| Excelsior (Mission @ Geneva) | ~70 m | **0.0** | 67.9 |
+| Presidio, Inspiration Point (actual coord) | ~90 m | **0.0** | 87.1 |
+| Bayview Hill summit | ~130 m | 12.4 | 130.0 |
+| Open SF Bay water | 0 m | **33–50** | 0.0 |
+| Portola Dr @ Woodside | ~90–130 m | 224.0 | 110.4 |
+| Sutro Tower base | ~254 m | 291.5 | 254.0 |
+| North Beach (Columbus @ Union) | ~15 m | **100.2** | 15.1 |
 
 The mechanism: with no nearby control points the RBF dives negative and is clamped to 0, so whole neighbourhoods read as sea level — while over the Bay it overshoots into a 50 m hill on open water. The "7.4% in-hull clamping" figure recorded earlier is not an interpolation-quality nicety; it is entire districts reading flat. For a router whose objective *is* climbing, a McLaren Park route would report zero gain.
 
-No holdout and no sanity point sits near the affected regions, which is exactly why it shipped — **the validation set determined what could be seen.** Mitigation is control-point coverage in the underserved districts plus sea-level anchors over water and along the coastline. This is tracked as an open defect, and it is the clearest possible argument for the 3DEP gate.
+No holdout and no sanity point sat near the affected regions, which is exactly why it shipped — **the validation set determined what could be seen.** The last two rows of that table were not in the review: they were found by sampling the northeast, a quadrant the review had not covered, which shows the same defect with the sign flipped. For a climbing router an invented 85 m hill in North Beach is worse than a missing one in McLaren Park.
+
+**Fix round 4** added 98 control points (118 → 216 control; the 10 holdouts untouched): district coverage across the southeast, the west, the Presidio, the Richmond and the northeast waterfront; true values for the over-inflated central massif; and a 20-point ring of `0.0 m` sea-level anchors over open Bay and Pacific water. Named summits are cited (Sutro Tower 834 ft, Edgehill 734 ft, Mount Olympus 553 ft, Bayview Hill 425 ft, McLaren Park 519 ft); every other new point is marked `estimated from surrounding terrain` at `confidence=low` and says so. In-hull clamping over the land hull fell 7.40% → 3.35%; total clamping 39.77% → 30.99%. The LOO sweep winner moved to `smoothing=0.0, neighbors=None` (a global fit is now well conditioned), dropping p90 LOO error 92.24 m → 72.71 m.
+
+`DISTRICT_COVERAGE_SAMPLES` in the generator is the missing validation set: 27 locations across all four quadrants plus open water on both sides, gated in `make fixtures` and in the test suite. Its bands are wide on purpose — most of those locations now have a control point within a few hundred metres, so it is a regression guard, not evidence of accuracy. **This remains the clearest possible argument for the 3DEP gate**, which is still outstanding.
 
 ### 2.3.2 The Filbert result is a round-trip, not an accuracy measurement
 

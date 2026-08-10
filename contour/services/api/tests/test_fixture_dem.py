@@ -29,17 +29,18 @@ if str(_SCRIPTS_DIR) not in sys.path:
 
 from make_fixture_dem import (  # noqa: E402
     DEFAULT_CSV_PATH,
-    ELEVATION_MAX_M,
-    ELEVATION_MIN_M,
+    DISTRICT_COVERAGE_SAMPLES,
     EXPECTED_HOLDOUT_COUNT,
+    MIN_CONTROL_HOLDOUT_SEPARATION_M,
     NEIGHBORS,
     NODATA,
     SMOOTHING,
-    SUMMIT_HOLDOUT_NAMES,
     ControlPointValidationError,
     build_dem,
+    haversine_m,
     load_control_points,
     run_loo_sweep,
+    sample_and_report_districts,
     sample_and_report_holdouts,
     select_best,
     sha256_of,
@@ -76,12 +77,11 @@ def test_fixture_dem_is_readable_and_covers_bbox(dem_path: Path) -> None:
 
 
 def test_fixture_dem_is_deterministic(tmp_path: Path) -> None:
-    # A coarser grid (50 m, not the production 10 m) keeps this test fast —
-    # `neighbors=20` (task-4 fix round 1) makes full-resolution builds
-    # ~40 s each, and determinism is a property of the fit/hash code path,
-    # not of grid resolution. Full-resolution (10 m) determinism is proven
-    # separately: two full `make fixtures` runs with identical
-    # `dem_data_sha256`/`dem_file_sha256`, recorded in task-4-report.md.
+    # A coarser grid (50 m, not the production 10 m) keeps this test fast.
+    # Determinism is a property of the fit/hash code path, not of grid
+    # resolution. Full-resolution (10 m) determinism is proven separately:
+    # two full `make fixtures` runs with identical `dem_data_sha256`/
+    # `dem_file_sha256`, recorded in task-4-report.md each round.
     a = build_dem(tmp_path / "a.tif", resolution_m=50.0)
     b = build_dem(tmp_path / "b.tif", resolution_m=50.0)
     assert sha256_of(a.path) == sha256_of(b.path)
@@ -99,9 +99,12 @@ def test_committed_control_point_csv_validates() -> None:
     holdouts = [p for p in points if p.role == "holdout"]
     controls = [p for p in points if p.role == "control"]
     assert len(holdouts) == EXPECTED_HOLDOUT_COUNT == 10
-    # 105 original + 13 added in task-4 fix round 2 (targeted street-scale
-    # relief points — see docs/DECISIONS.md).
-    assert len(controls) == 118
+    # 105 original + 13 added in fix round 2 (targeted street-scale relief)
+    # + 98 added in fix round 4 (district coverage for the southeast, the
+    # west, the Presidio and the North Beach/waterfront valley, corrections
+    # to the over-inflated central massif, and a 20-point ring of 0.0 m
+    # sea-level anchors over open water) — see docs/DECISIONS.md.
+    assert len(controls) == 216
     assert len(points) == len(holdouts) + len(controls)
     for p in points:
         assert SF_BBOX[0] <= p.lon <= SF_BBOX[2]
@@ -142,6 +145,44 @@ def test_load_control_points_rejects_wrong_holdout_count(tmp_path: Path) -> None
     )
     with pytest.raises(ControlPointValidationError, match="holdout"):
         load_control_points(bad)
+
+
+def test_load_control_points_rejects_control_too_close_to_a_holdout(tmp_path: Path) -> None:
+    """A control point within `MIN_CONTROL_HOLDOUT_SEPARATION_M` of a holdout
+    makes that holdout's accuracy check tautological — the interpolator is
+    then being asked to reproduce a value it was handed from ~metres away.
+    Exact-duplicate rejection is not enough: 1 m apart passes that check and
+    is just as circular. The message must name both points so the offender
+    is obvious from the failure alone."""
+    bad = tmp_path / "bad.csv"
+    rows = ["name,lat,lon,ele_m,role\n"]
+    # ~11 m north of "Holdout 0" below — nowhere near an exact duplicate.
+    rows.append("Too close to a holdout,37.7601,-122.4000,20.0,control\n")
+    rows += [f"Filler {i},37.75,-122.4{i:02d},10.0,control\n" for i in range(10)]
+    rows.append("Holdout 0,37.7600,-122.4000,20.0,holdout\n")
+    rows += [f"Holdout {i},37.78,-122.4{i:02d},20.0,holdout\n" for i in range(1, 10)]
+    bad.write_text("".join(rows))
+    with pytest.raises(ControlPointValidationError) as excinfo:
+        load_control_points(bad)
+    message = str(excinfo.value)
+    assert "Too close to a holdout" in message
+    assert "Holdout 0" in message
+
+
+def test_committed_csv_keeps_every_control_clear_of_every_holdout() -> None:
+    """The committed table itself must satisfy the separation guard — not
+    just synthetic fixtures. Recomputed here from the loaded points rather
+    than trusted from the loader, so a loader bug that skipped the check
+    would still be caught."""
+    points = load_control_points(DEFAULT_CSV_PATH)
+    controls = [p for p in points if p.role == "control"]
+    holdouts = [p for p in points if p.role == "holdout"]
+    closest = min(
+        (haversine_m(c.lat, c.lon, h.lat, h.lon), c.name, h.name)
+        for c in controls
+        for h in holdouts
+    )
+    assert closest[0] >= MIN_CONTROL_HOLDOUT_SEPARATION_M, closest
 
 
 def test_load_control_points_rejects_duplicate_coordinates(tmp_path: Path) -> None:
@@ -200,11 +241,52 @@ def test_fixture_dem_has_zero_nodata_pixels(dem_path: Path) -> None:
         assert int(np.sum(arr == NODATA)) == 0
 
 
-def test_fixture_dem_values_are_within_clamp_bounds(dem_path: Path) -> None:
-    with rasterio.open(dem_path) as ds:
-        arr = ds.read(1)
-        assert float(arr.min()) >= ELEVATION_MIN_M
-        assert float(arr.max()) <= ELEVATION_MAX_M
+def test_every_district_reads_as_san_francisco(dem_path: Path) -> None:
+    """The defect this replaces a vacuous test with.
+
+    The previous test here asserted `arr.min() >= 0 and arr.max() <= 300` —
+    which `np.clip(z, 0, 300)` guarantees unconditionally, so it could not
+    fail. Meanwhile the DEM had whole districts reading 0.0 m (McLaren Park,
+    the Excelsior, the Presidio) and a 30-50 m hill on open SF Bay, and no
+    holdout or sanity point sat anywhere near any of them. The validation
+    set determined what could be seen.
+
+    `DISTRICT_COVERAGE_SAMPLES` is that missing coverage: every quadrant
+    plus open water, with bands wide enough to be about "is this
+    recognisably San Francisco" rather than about interpolation accuracy.
+    A control point deleted, an axis flipped, or a district left
+    unrepresented again all fail here."""
+    failures = [
+        (name, value, low, high)
+        for name, value, low, high, ok in sample_and_report_districts(dem_path)
+        if not ok
+    ]
+    assert not failures, failures
+
+
+def test_district_coverage_table_spans_the_whole_city() -> None:
+    """Guards the guard.
+
+    The root cause of the defect above was not a bad interpolation — it
+    was that every check pointed at the same central corridor. A table
+    that quietly shrank back toward the middle would reintroduce exactly
+    that blind spot while still passing, so the table's own spread is
+    asserted here: at least three land samples in each quadrant of
+    `SF_BBOX`, and open-water samples on both the Bay and the Pacific
+    side."""
+    west, south, east, north = SF_BBOX
+    mid_lon, mid_lat = (west + east) / 2, (south + north) / 2
+    quadrants = {"NW": 0, "NE": 0, "SW": 0, "SE": 0}
+    water_east = water_west = 0
+    for _name, lat, lon, _low, high in DISTRICT_COVERAGE_SAMPLES:
+        quadrants[("N" if lat >= mid_lat else "S") + ("E" if lon >= mid_lon else "W")] += 1
+        if high <= 10.0:  # an open-water sample: banded at sea level
+            if lon >= mid_lon:
+                water_east += 1
+            else:
+                water_west += 1
+    assert all(n >= 3 for n in quadrants.values()), quadrants
+    assert water_east >= 2 and water_west >= 2, (water_east, water_west)
 
 
 # ---------------------------------------------------------------------------
@@ -241,14 +323,33 @@ def test_interpolation_parameters_match_cv_sweep_winner() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_holdout_tolerance_assignment_matches_the_ruling(dem_path: Path) -> None:
-    """Tests the *mechanism*: every named summit holdout gets +/-40 m,
-    every other holdout gets +/-25 m."""
+def test_each_named_holdout_gets_the_tolerance_the_ruling_gave_it(dem_path: Path) -> None:
+    """A golden table, not a re-implementation.
+
+    This replaces two tests that could not fail: one re-derived
+    `name in SUMMIT_HOLDOUT_NAMES ? 40 : 25` — the exact branch it was
+    testing — and one restated the frozenset's own literal contents. Both
+    would have followed any edit to the code they were guarding.
+
+    The table below is written out by hand instead, one row per holdout.
+    Editing `SUMMIT_HOLDOUT_NAMES`, either tolerance constant, or the
+    holdout set itself now fails here and has to be re-decided
+    deliberately, which is what the fix-round-3 ruling asked for."""
+    expected = {
+        "Twin Peaks summit (Eureka Peak)": 40.0,
+        "Bernal Heights summit": 40.0,
+        "Corona Heights summit": 40.0,
+        "Ferry Building": 25.0,
+        "Ocean Beach (at Judah)": 25.0,
+        "Alamo Square": 25.0,
+        "Lands End": 25.0,
+        "Mission Dolores Park": 25.0,
+        "Fort Mason": 25.0,
+        "Candlestick Point": 25.0,
+    }
+    assert len(expected) == EXPECTED_HOLDOUT_COUNT
     results = sample_and_report_holdouts(dem_path)
-    assert len(results) == EXPECTED_HOLDOUT_COUNT
-    for r in results:
-        expected_tolerance = 40.0 if r.name in SUMMIT_HOLDOUT_NAMES else 25.0
-        assert r.tolerance_m == expected_tolerance, r.name
+    assert {r.name: r.tolerance_m for r in results} == expected
 
 
 def test_all_holdouts_pass_the_gross_breakage_gate(dem_path: Path) -> None:
@@ -261,25 +362,6 @@ def test_all_holdouts_pass_the_gross_breakage_gate(dem_path: Path) -> None:
     results = sample_and_report_holdouts(dem_path)
     failures = [r for r in results if not r.within_tolerance]
     assert not failures, [(r.name, r.error_m, r.tolerance_m) for r in failures]
-
-
-def test_summit_holdout_set_is_exactly_three_named_points() -> None:
-    """Pins the named summit allowlist itself — a silent edit here would
-    silently change the tolerance ruling without anyone noticing. Twin
-    Peaks summit, Bernal Heights summit, and Corona Heights summit are
-    each a local terrain maximum with no control point at their own peak
-    (the principled definition in make_fixture_dem.py's comment) —
-    membership is not "whichever holdout is currently failing"."""
-    assert (
-        frozenset(
-            {
-                "Twin Peaks summit (Eureka Peak)",
-                "Bernal Heights summit",
-                "Corona Heights summit",
-            }
-        )
-        == SUMMIT_HOLDOUT_NAMES
-    )
 
 
 # ---------------------------------------------------------------------------

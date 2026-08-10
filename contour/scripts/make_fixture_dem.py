@@ -85,6 +85,21 @@ CSV_ELEVATION_MAX_M: float = 290.0
 
 EXPECTED_HOLDOUT_COUNT: int = 10
 
+# Minimum distance a `control` point must keep from every `holdout` point.
+#
+# Exact-coordinate duplicate rejection (below) is not enough. A control
+# point 1 m from a holdout passes that check and silently makes the
+# holdout's accuracy check tautological: the interpolator is handed the
+# answer from a metre away and then asked to reproduce it. That is the
+# defect class this dataset was already cleaned of once, and it becomes
+# easy to reintroduce by accident every time the table grows (fix round 4
+# added 86 points in one go). 50 m is comfortably below the tightest
+# genuine separation in the committed table (65.4 m, "Great Hwy and Judah
+# St" vs. the "Ocean Beach (at Judah)" holdout) and comfortably above the
+# 10 m raster cell, so a violation means someone placed a point on top of
+# a holdout rather than merely nearby.
+MIN_CONTROL_HOLDOUT_SEPARATION_M: float = 50.0
+
 KERNEL: str = "thin_plate_spline"
 
 # `smoothing` and `neighbors` are selected by `select_best(run_loo_sweep(...))`
@@ -114,8 +129,23 @@ KERNEL: str = "thin_plate_spline"
 # post-hoc adjustment against the holdouts it exists to check
 # independently. See docs/DECISIONS.md for both rounds' exact numbers —
 # not duplicated here so this comment doesn't itself go stale.
-SMOOTHING: float = 2.0
-NEIGHBORS: int | None = 20
+#
+# Fix round 4 re-ran the sweep after adding 86 control points (204 total)
+# and the winner MOVED, for the first time: `neighbors=None` (a single
+# global fit) now beats `neighbors=20` on median LOO error (16.73 m vs.
+# 17.03 m) and by a wide margin on p90 (72.60 m vs. 71.54 m at n=20, both
+# far better than the 92.2 m p90 the 118-point set produced at any
+# setting). `neighbors=20` won at 105 and 118 points because the control
+# set was too sparse for a global fit to be well conditioned; at 204
+# points, with the southeast, the west, the Presidio and an 18-point ring
+# of sea-level water anchors all represented, the global fit has enough
+# data everywhere and no longer has to extrapolate. The smoothing tie is
+# unchanged and unchanged for the same reason (see above): all four
+# smoothing values are identical to 2 decimal places at every `neighbors`
+# setting, so `0.0` here is the literal argmin of a tie, not a claim that
+# zero smoothing is better than 2.0.
+SMOOTHING: float = 0.0
+NEIGHBORS: int | None = None
 
 # The candidate grid swept by `run_loo_sweep` (called from
 # `scripts/cv_sweep.py`). Kept here, not just in the sweep script, so the
@@ -151,14 +181,33 @@ class ControlPointValidationError(ValueError):
     """
 
 
+def haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Great-circle distance in metres between two WGS84 points.
+
+    Used by the control/holdout separation guard. Deliberately not the
+    module's local equirectangular frame: that frame exists to make the
+    RBF's *smoothing* isotropic, whereas this is a true-distance question
+    ("are these two points really 50 m apart on the ground?") and should
+    not inherit the projection's approximation.
+    """
+    r = 6_371_000.0
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dphi = p2 - p1
+    dlambda = math.radians(lon2 - lon1)
+    a = math.sin(dphi / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dlambda / 2) ** 2
+    return 2 * r * math.asin(math.sqrt(a))
+
+
 def load_control_points(csv_path: Path) -> tuple[ControlPoint, ...]:
     """Read and validate the control-point CSV.
 
     Validates: every point inside `SF_BBOX`, every `ele_m` in
     `[CSV_ELEVATION_MIN_M, CSV_ELEVATION_MAX_M]`, exactly
-    `EXPECTED_HOLDOUT_COUNT` holdout rows, no duplicate (lat, lon) pairs.
-    Raises `ControlPointValidationError` naming the first violation found
-    rather than attempting to repair the data.
+    `EXPECTED_HOLDOUT_COUNT` holdout rows, no duplicate (lat, lon) pairs,
+    and every `control` point at least `MIN_CONTROL_HOLDOUT_SEPARATION_M`
+    from every `holdout` point. Raises `ControlPointValidationError`
+    naming the first violation found rather than attempting to repair the
+    data.
     """
     west, south, east, north = SF_BBOX
     rows: list[ControlPoint] = []
@@ -223,6 +272,20 @@ def load_control_points(csv_path: Path) -> tuple[ControlPoint, ...]:
         )
     if role_counts["control"] == 0:
         raise ControlPointValidationError(f"{csv_path}: found zero control rows")
+
+    holdouts = [p for p in rows if p.role == "holdout"]
+    for c in (p for p in rows if p.role == "control"):
+        for h in holdouts:
+            separation = haversine_m(c.lat, c.lon, h.lat, h.lon)
+            if separation < MIN_CONTROL_HOLDOUT_SEPARATION_M:
+                raise ControlPointValidationError(
+                    f"{csv_path}: control point {c.name!r} at (lat={c.lat}, lon={c.lon}) is "
+                    f"only {separation:.1f} m from holdout {h.name!r} at "
+                    f"(lat={h.lat}, lon={h.lon}); the minimum separation is "
+                    f"{MIN_CONTROL_HOLDOUT_SEPARATION_M} m. A control point this close makes "
+                    f"that holdout's accuracy check tautological — move or remove the control "
+                    f"point, never the holdout."
+                )
 
     return tuple(rows)
 
@@ -296,11 +359,23 @@ class ClampStats:
     clamped_low: int
     clamped_high: int
     total_pixels: int
-    # Pixels clamped that also fall inside the convex hull of the control
-    # points — i.e. nominally "should have real land data nearby," as
-    # opposed to the open Bay/ocean pixels outside the hull where there is
-    # no control data at all and clamping to sea level is expected. See
-    # docs/DECISIONS.md "Task 4, fix round 1".
+    # Pixels clamped that also fall inside the convex hull of the *land*
+    # control points — i.e. nominally "should have real land data nearby,"
+    # as opposed to open Bay/ocean pixels where clamping to sea level is
+    # the correct answer, not a defect. See docs/DECISIONS.md "Task 4, fix
+    # round 1" for the original definition.
+    #
+    # Fix round 4 narrowed the hull from "all control points" to "control
+    # points above 0 m", because that round added an 18-point ring of
+    # 0.0 m sea-level anchors over open water. Those anchors stretch the
+    # all-control hull out across the Bay and the Pacific, nearly doubling
+    # the in-hull pixel count (970k -> 1.88M) with water — where a surface
+    # that dips a hair below zero and clamps to 0 is doing exactly the
+    # right thing. Left unnarrowed, the statistic reads 21.13% and would
+    # look like a large regression from fix round 2's 7.40% while actually
+    # measuring a different question. Over the land hull, the same build
+    # measures 2.87%. The number is supposed to mean "clamped despite
+    # being surrounded by land control data"; this keeps it meaning that.
     in_hull_clamped: int
     in_hull_pixels: int
 
@@ -361,7 +436,9 @@ def interpolate_dem(
     z_clamped = np.clip(z, ELEVATION_MIN_M, ELEVATION_MAX_M).astype(np.float32)
     array = z_clamped.reshape(grid.height, grid.width)
 
-    in_hull = _in_convex_hull(xy, grid_xy)
+    # Hull over the land control points only — see the ClampStats comment.
+    land_xy = xy[eles > ELEVATION_MIN_M]
+    in_hull = _in_convex_hull(land_xy, grid_xy)
     in_hull_clamped = int(np.sum(in_hull & ((z < ELEVATION_MIN_M) | (z > ELEVATION_MAX_M))))
 
     stats = ClampStats(
@@ -727,6 +804,93 @@ def sample_and_report_sanity(dem_path: Path) -> list[tuple[str, float, float, fl
     return results
 
 
+# --- District coverage check (Task 4 fix round 4) ---------------------------
+#
+# The four `_SANITY_SAMPLES` above all sit inside the well-sampled central
+# corridor. That is exactly why the defect fix round 4 repaired could ship:
+# outside that corridor the RBF dived negative and clamped to 0, so McLaren
+# Park, the Excelsior and the Presidio all read as sea level, while over
+# open Bay water it overshot into a 30-50 m hill — and no holdout and no
+# sanity point sat anywhere near any of it. The validation set determined
+# what could be seen.
+#
+# This table is the missing coverage: every quadrant of the city plus open
+# water on both sides. The bands are deliberately wide — tens of metres —
+# because this asks "is this recognisably San Francisco here?", not "is
+# this accurate here". The fixture DEM cannot answer the second question at
+# any tolerance; the 3DEP run is the accuracy gate. What these bands do
+# catch is the failure that actually happened: an inhabited district
+# reading 0.0 m, water reading like a hill, or the central massif inflated
+# by 100 m.
+#
+# Honest caveat: most of these locations now have a control point within a
+# few hundred metres (that is the fix), so this is a regression guard, not
+# independent evidence of accuracy. The 10 holdouts remain the independent
+# check.
+DISTRICT_COVERAGE_SAMPLES: tuple[tuple[str, float, float, float, float], ...] = (
+    # --- Southeast ---
+    ("McLaren Park summit", 37.7180, -122.4185, 100.0, 200.0),
+    ("Excelsior (Mission at Geneva)", 37.7200, -122.4400, 35.0, 105.0),
+    ("Visitacion Valley (Leland at Bayshore)", 37.7115, -122.4055, 0.0, 45.0),
+    ("Bayview Hill summit", 37.7175, -122.3905, 85.0, 175.0),
+    ("Hunters Point Hill", 37.7345, -122.3805, 10.0, 80.0),
+    ("Portola (Mansell at San Bruno)", 37.7255, -122.4045, 25.0, 95.0),
+    # --- Southwest and west ---
+    ("Outer Sunset (Judah at 40th)", 37.7605, -122.4980, 0.0, 30.0),
+    ("Parkside (Taraval at 30th)", 37.7425, -122.4885, 0.0, 45.0),
+    ("Lake Merced", 37.7285, -122.4930, 0.0, 25.0),
+    ("West Portal (Ulloa at West Portal)", 37.7402, -122.4680, 40.0, 110.0),
+    ("Ingleside (Ocean at Ashton)", 37.7245, -122.4585, 30.0, 100.0),
+    # --- The central massif (was inflated by ~100 m) ---
+    ("Sutro Tower base", 37.7552, -122.4528, 215.0, 290.0),
+    ("Portola Dr at Woodside Ave", 37.7430, -122.4530, 70.0, 155.0),
+    # --- Northwest ---
+    # The review reported "Presidio Inspiration Pt 37.7995,-122.4585, real
+    # ~95 m, DEM 0.0". The 0.0 was a real defect. The label was not: that
+    # coordinate is 870 m north of the actual Inspiration Point (Trailforks
+    # puts the trailhead at 37.79168,-122.4582) and only 157 m from the
+    # Main Post parade ground, down in the terrace above Crissy Field where
+    # ~30 m — not ~95 m — is the real ground. Both points are sampled here
+    # under their true names rather than carrying the mislabel forward.
+    ("Presidio Main Post (the review's 'Inspiration Pt' coord)", 37.7995, -122.4585, 12.0, 60.0),
+    ("Presidio Inspiration Point (actual)", 37.7917, -122.4582, 45.0, 125.0),
+    ("Golden Gate Bridge toll plaza", 37.8070, -122.4750, 30.0, 115.0),
+    ("Outer Richmond (Balboa at 40th)", 37.7760, -122.5000, 5.0, 55.0),
+    ("Sea Cliff (El Camino del Mar)", 37.7870, -122.4885, 15.0, 80.0),
+    ("Inner Richmond (Geary at 20th)", 37.7805, -122.4790, 15.0, 70.0),
+    # --- Northeast. The review did not sample this quadrant; sampling it
+    # while verifying fix round 4 found the same defect with the sign
+    # flipped. Columbus at Union is the flat saddle between Telegraph Hill
+    # and Russian Hill and read 100.2 m — the surface simply bridged the
+    # two ~100 m hilltops because nothing in the valley said otherwise.
+    # Aquatic Park, at the waterline, read 53.6 m. For a router whose
+    # objective is climbing, an invented 85 m hill in North Beach is worse
+    # than a missing one in McLaren Park.
+    ("North Beach valley (Columbus at Union)", 37.8000, -122.4090, 0.0, 40.0),
+    ("Aquatic Park shoreline", 37.8075, -122.4230, 0.0, 20.0),
+    ("Jackson Square (Montgomery at Broadway)", 37.7980, -122.4030, 0.0, 30.0),
+    # --- Open water: 0 m by definition, so these are the tightest bands ---
+    ("Open SF Bay (east of the city)", 37.8200, -122.3700, 0.0, 8.0),
+    ("Open SF Bay (west of Treasure Island)", 37.8250, -122.3800, 0.0, 8.0),
+    ("Open SF Bay (off Mission Bay)", 37.7700, -122.3700, 0.0, 10.0),
+    ("Pacific Ocean (west of Ocean Beach)", 37.7600, -122.5200, 0.0, 10.0),
+    ("Golden Gate strait (bridge midspan)", 37.8250, -122.4750, 0.0, 10.0),
+)
+
+
+def sample_and_report_districts(dem_path: Path) -> list[tuple[str, float, float, float, bool]]:
+    """Sample `DISTRICT_COVERAGE_SAMPLES` and return
+    (name, sampled_value, expected_low, expected_high, ok) tuples."""
+    results = []
+    with rasterio.open(dem_path) as ds:
+        arr = ds.read(1)
+        for name, lat, lon, low, high in DISTRICT_COVERAGE_SAMPLES:
+            row, col = ds.index(lon, lat)
+            value = float(arr[row, col])
+            results.append((name, value, low, high, low <= value <= high))
+    return results
+
+
 def main() -> None:
     result = build_dem(DEFAULT_DEM_PATH)
     manifest = write_manifest(result, DEFAULT_MANIFEST_PATH)
@@ -743,7 +907,8 @@ def main() -> None:
     print(
         f"  in-hull clamped pixels: {result.clamp_stats.in_hull_clamped:,} "
         f"({result.clamp_stats.in_hull_clamped_fraction:.4%} of "
-        f"{result.clamp_stats.in_hull_pixels:,} pixels inside the control points' convex hull)"
+        f"{result.clamp_stats.in_hull_pixels:,} pixels inside the land control points' "
+        f"convex hull)"
     )
     print(f"  interpolation: smoothing={SMOOTHING}, neighbors={NEIGHBORS} (see cv_sweep.py)")
     print(f"Wrote {DEFAULT_MANIFEST_PATH}")
@@ -755,8 +920,13 @@ def main() -> None:
         status = "OK" if ok else "FAIL"
         all_ok = all_ok and ok
         print(f"  [{status}] {name}: {value:.1f} m (expected [{low}, {high}])")
+    print("District coverage (all four quadrants plus open water):")
+    for name, value, low, high, ok in sample_and_report_districts(result.path):
+        status = "OK" if ok else "FAIL"
+        all_ok = all_ok and ok
+        print(f"  [{status}] {name}: {value:.1f} m (expected [{low}, {high}])")
     if not all_ok:
-        raise SystemExit("Sanity check failed — see FAIL lines above.")
+        raise SystemExit("Sanity/district check failed — see FAIL lines above.")
 
     print("Holdout accuracy (never fed to the interpolator):")
     for h in sample_and_report_holdouts(result.path):

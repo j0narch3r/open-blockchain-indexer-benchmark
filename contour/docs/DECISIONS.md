@@ -1120,3 +1120,185 @@ one `dataset.read()`/`Geod.fwd()` call per point instead of vectorizing with num
 resolution #3, same latency reasoning). Raising on any point in the outermost half-pixel margin
 instead of clamping (rejected — resolution #2: would reject legitimate coastal/edge-of-service-area
 points, which the fixture DEM covers right up to `SF_BBOX`'s boundary).
+
+---
+
+## Task 4, fix round 4: the DEM is now San Francisco outside the sampled corridor
+
+The independent review's headline finding, restated plainly because it is the point of this
+round: **outside the well-sampled central corridor, this DEM was not San Francisco.** McLaren
+Park's summit read 0.0 m. So did the Excelsior, and the Presidio. Open SF Bay read 33-50 m — a
+hill on open water. The central massif read 100 m too high. For a router whose objective *is*
+climbing, a McLaren Park route reported zero gain and a ride across the Bay reported a climb.
+
+The mechanism was never mysterious: where no control point was near, the thin-plate spline dived
+negative and `np.clip` turned that into 0.0 m; over the Bay it overshot upward instead. What kept
+it invisible is the part worth remembering — **no holdout and no sanity point sat anywhere near
+any affected region. The validation set determined what could be seen.** Every check pointed at
+the same corridor, and every check passed.
+
+### Coverage: 98 new control points (118 -> 216 control; holdouts untouched at 10)
+
+Added as `role=control` only. No holdout was added, moved, revalued, or built on top of; the
+closest any control point comes to any holdout is 65.4 m ("Great Hwy and Judah St" vs. the
+"Ocean Beach (at Judah)" holdout), a pre-existing pair, and every one of the 98 new points is
+more than 460 m from the nearest holdout.
+
+- **Southeast (21)** — McLaren Park (summit and four flanks), the Excelsior, Crocker-Amazon,
+  Visitacion Valley, Little Hollywood, Bayview Hill (summit and south slope), Silver Terrace,
+  Portola, University Mound, Hunters Point Hill, India Basin.
+- **Southwest and west (28)** — Oceanview, Merced Heights, Ingleside, Ingleside Terraces,
+  Sunnyside, Mission Terrace, Glen Canyon ridge, plus an Outer Sunset / Parkside / Lake Merced
+  grid (Taraval, Judah, Noriega, Sloat, Great Hwy, Harding Park, SF State, Fort Funston).
+- **The central massif (12)** — Sutro Tower base, Clarendon, Midtown Terrace, Laguna Honda
+  (Blvd and reservoir), Portola Dr at Woodside and at Twin Peaks Blvd, Forest Hill station,
+  West Portal, Edgehill Mountain, Miraloma Park, Mount Olympus. These read too *high* before;
+  real values pull them down.
+- **Northwest (17)** — the Presidio (Inspiration Point ridge, Main Post, Crissy Field, the toll
+  plaza, Baker Beach, Rob Hill, the PHS hospital ground), Sea Cliff, Lincoln Park, Sutro Heights,
+  Point Lobos and an Outer Richmond grid.
+- **Northeast (10)** — see "a defect the review had not seen" below.
+- **Sea-level anchors (20)** — a ring of `0.0 m` points over open water: SF Bay east and north of
+  the city, the Golden Gate strait, and the Pacific west of Ocean Beach and Fort Funston. Marked
+  `source=sea level by definition`, `confidence=high`. These are legitimate ground truth: open
+  water is at 0 m, and they are what stops the surface inventing a hill on the Bay or diving
+  negative at the coast.
+
+**Sourcing, honestly.** Named summits carry citations: Sutro Tower base 834 ft (Sutro Tower's own
+site and Wikipedia, `high`), Edgehill Mountain 734 ft, Mount Olympus 553 ft, Bayview Hill 425 ft,
+Bayview Park 367 ft (topozone), McLaren Park's high point 519 ft (PeakVisor), Hunters Point Hill
+125 ft (USGS as cited by a secondary source, so `low`), Lake Merced's surface (`low` — topozone
+says ~16 ft while SFPUC's own records show a 3-27 ft historic range, and that disagreement is
+recorded in the `source` field rather than hidden). **Everything else is
+`estimated from surrounding terrain` at `confidence=low`, and says so** — the same standard the
+existing table already used for the majority of its rows. Direct USGS 3DEP/EPQS access remains
+blocked by this environment's egress proxy, unchanged from fix round 2.
+
+### A defect the review had not seen, found by sampling beyond its list
+
+The review sampled the southeast, the west and the northwest. Sampling the **northeast** while
+verifying this round found the same defect with the sign flipped: **Columbus Ave at Union St read
+100.2 m.** That is the flat saddle between Telegraph Hill and Russian Hill; the surface had simply
+bridged the two ~100 m hilltops because nothing in the valley said otherwise. Aquatic Park, at the
+waterline, read 53.6 m. **For a climbing router an invented 85 m hill in North Beach is worse than
+a missing one in McLaren Park** — it will route around a climb that does not exist. Ten points
+(North Beach valley, Bay St, Aquatic Park, Fisherman's Wharf, Jackson Square, the Broadway tunnel
+portal, Polk/Union, Chestnut and Bay at Van Ness, Geary at 20th) fixed it: 15.1 m and 1.0 m now.
+
+### The review's Presidio coordinate was mislabelled
+
+The review lists "Presidio Inspiration Pt 37.7995, -122.4585, real ~95 m". The 0.0 m reading there
+was a real defect. The label was not: that coordinate is **870 m north of the actual Inspiration
+Point** (Trailforks puts the trailhead at 37.79168, -122.4582) and 157 m from the Main Post parade
+ground, down on the terrace above Crissy Field where ~30 m, not ~95 m, is the real ground. Both
+locations are now sampled under their true names — 16.0 m at the Main Post, 87.1 m at Inspiration
+Point — rather than carrying the mislabel forward as a target to hit.
+
+### The LOO sweep winner moved, for the first time
+
+Re-run over all 216 control points, same 16-combination grid, same scoring:
+
+| smoothing | neighbors | median LOO (m) | p90 LOO (m) |
+|---:|---:|---:|---:|
+| **0.0** | **global** | **16.39** | **72.71** |
+| 0.0 | 10 | 18.50 | 74.54 |
+| 0.0 | 20 | 17.36 | 72.67 |
+| 0.0 | 40 | 17.13 | 72.59 |
+| 0.1 / 0.5 / 2.0 | (same pattern) | (within 0.05 m of the 0.0 row at each `neighbors`) | |
+
+**Winner: `smoothing=0.0, neighbors=None` (a single global fit)**, replacing
+`smoothing=2.0, neighbors=20`. `neighbors=20` won at 105 and 118 points because the control set
+was too sparse for a global fit to be well conditioned. At 216 points — with the southeast, the
+west, the Presidio, the northeast and a 20-point water ring all represented — the global fit has
+data everywhere and no longer extrapolates: p90 LOO error falls from 92.24 m to 72.71 m. The
+smoothing tie persists for the third time and for the reason already recorded: in this module's
+local-metres frame the thin-plate kernel runs ~1e4-1e8, so an additive term of 0-2 on the diagonal
+is noise. `0.0` is the literal argmin of that tie, not a claim.
+
+Median LOO error rose, 13.80 m -> 16.39 m. That is expected and is not a regression in the DEM:
+the 98 new points are mostly `low`-confidence terrain estimates in districts that previously had
+*no* data at all, so the cross-validation now scores the model on hard, sparse ground it was never
+asked about before. The tolerances (±25 m / ±40 m) are unchanged — they are settled by the fix
+round 3 ruling and were not re-derived to accommodate this number, though it is worth noting they
+are now 1.5x and 2.4x the median rather than 1.8x and 2.9x.
+
+### The in-hull clamp statistic had to be repaired before it could be reported
+
+Adding water anchors stretches the convex hull of *all* control points out across the Bay and the
+Pacific, nearly doubling the in-hull pixel count (970k -> 1.88M) with water — where a surface that
+dips a hair below zero and clamps to 0 is doing exactly the right thing. Left as-is the statistic
+reads **21.24%** and would look like a large regression while actually measuring a different
+question. `ClampStats` now computes the hull over **land control points only** (`ele_m > 0`),
+which is what the number was always supposed to mean: "clamped despite being surrounded by land
+control data".
+
+| | in-hull (land) clamped | total clamped |
+|---|---:|---:|
+| Fix round 2 (118 points) | 7.40% | 39.77% |
+| **Fix round 4 (216 points)** | **3.35%** | **30.99%** |
+
+### Minimum separation between control and holdout points (50 m)
+
+`load_control_points` previously rejected only *exact* duplicate coordinates. A control point 1 m
+from a holdout passed that check and would have silently made that holdout's accuracy check
+tautological — the defect class this dataset was already cleaned of once, and one that gets easy
+to reintroduce by accident when the table grows by 98 rows in a single round. Validation now fails
+the load if any `control` point is within `MIN_CONTROL_HOLDOUT_SEPARATION_M = 50.0` m (true
+haversine distance, not the module's local equirectangular approximation) of any `holdout`,
+naming both points and telling the reader to move the control point, never the holdout. 50 m sits
+below the tightest genuine separation in the committed table (65.4 m) and well above the 10 m
+raster cell, so a violation means someone placed a point *on* a holdout rather than merely near
+one.
+
+### Three tests that could not fail, replaced
+
+- `test_fixture_dem_values_are_within_clamp_bounds` asserted `min >= 0 and max <= 300`, which
+  `np.clip(z, 0, 300)` guarantees unconditionally. Replaced by
+  `test_every_district_reads_as_san_francisco`, which samples `DISTRICT_COVERAGE_SAMPLES` — 27
+  locations across all four quadrants plus open water on both sides — and is the gate that the
+  defect above could not have passed. Plus `test_district_coverage_table_spans_the_whole_city`,
+  which guards the guard: the table must keep at least three land samples per bbox quadrant and
+  water samples on both the Bay and Pacific side, so it cannot quietly shrink back toward the
+  central corridor and reintroduce the blind spot while still passing.
+- `test_holdout_tolerance_assignment_matches_the_ruling` re-implemented the exact
+  `name in SUMMIT_HOLDOUT_NAMES ? 40 : 25` branch it was testing, and
+  `test_summit_holdout_set_is_exactly_three_named_points` restated the frozenset's own literal
+  contents. Both would have followed any edit to the code they guarded. Replaced by one golden
+  table, `test_each_named_holdout_gets_the_tolerance_the_ruling_gave_it`, which writes out all ten
+  holdout names and their tolerances by hand; editing the summit set, either constant, or the
+  holdout roster now fails and has to be re-decided deliberately.
+
+**The district bands are wide on purpose and are a regression guard, not evidence of accuracy.**
+Most of those locations now have a control point within a few hundred metres — that is the fix —
+so passing them proves the districts are represented, not that the elevations are right. The 10
+holdouts remain the only independent check, and the 3DEP run remains the only accuracy gate.
+
+### Two inflated confidence values downgraded
+
+`Filbert St and Leavenworth St` was `medium` but is derived from a `low`-confidence anchor;
+`Corona Heights base` was `medium` off a maps-aggregation source. Both are now `low`, with the
+reason written into the `source` field.
+
+### Corona Heights: still 1.1 m inside the gate
+
+Corona Heights summit samples at 119.6 m against 158.5 m actual — **-38.9 m against a ±40 m
+tolerance**, a margin of 1.1 m (it was 0.9 m before this round; adding Mount Olympus, a real
+169 m local maximum 880 m away, helped slightly). This is reported rather than worked around: no
+point was excluded, moved, or revalued to protect it, and the tolerance was not widened. It
+remains the fixture DEM's most fragile holdout and a future data change could still push it over.
+
+### Verified, not assumed
+
+Determinism re-proven after every change: two full `make fixtures` runs at 10 m production
+resolution give identical `dem_data_sha256` (`c3ee0fde...`) and `dem_file_sha256` (`4b071038...`);
+only `generated_at` and the derived `manifest_sha256` differ, as designed. All 10 holdouts pass
+the gross-breakage gate. `make verify` green at 93 tests.
+
+**Alternatives rejected:** Keeping `smoothing=2.0, neighbors=20` because it was the incumbent
+(rejected — the constants are pinned to the sweep's literal output by
+`test_interpolation_parameters_match_cv_sweep_winner`, and the whole point of measurement-driven
+selection is that it is allowed to change its mind). Fabricating precise spot elevations for the
+~150 street corners with no citable figure (rejected — a fabricated value dressed as sourced is
+worse than an honest `low`). Reporting the 21.24% all-hull clamp figure without repairing the
+metric (rejected — it would have been true and misleading). Adding Corona Heights protection of
+any kind (rejected — explicitly out of bounds, and the fragility is the finding).
