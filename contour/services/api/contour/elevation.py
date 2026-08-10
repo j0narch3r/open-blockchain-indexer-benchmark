@@ -1,9 +1,9 @@
-"""Geodesic polyline resampling and bilinear DEM sampling (design doc §4.4).
+"""Geodesic polyline resampling, bilinear DEM sampling, and elevation
+profile assembly (design doc §4.4).
 
-This module owns all DEM access (design doc §4.1's dependency diagram) and
-the geodesic geometry helpers Task 6 builds the elevation profile, ascent
-hysteresis, and grade computation on top of. Two responsibilities, kept in
-one module because they share no state but are always used together:
+This module owns all DEM access (design doc §4.1's dependency diagram).
+Task 5 built the geometry/sampling primitives; Task 6 builds the
+elevation-profile algorithms on top of them:
 
 - `resample_polyline` / `geodesic_length_m` — geodesic (not planar)
   interpolation along a route's geometry using `pyproj.Geod(ellps="WGS84")`.
@@ -16,6 +16,24 @@ one module because they share no state but are always used together:
   grades (design doc §4.4 "Sampling"); bilinear interpolation is
   hand-rolled here instead (see `docs/DECISIONS.md` for why no dependency
   was added for it).
+- `smooth` — Savitzky-Golay filtering of a raw sampled elevation series
+  (design doc §4.4 "Smoothing"). A moving average flattens genuine hill
+  crests; Savitzky-Golay preserves peak amplitude while still removing
+  high-frequency DEM sampling noise. See `docs/DECISIONS.md` for the full
+  justification (also pinned by a test contrasting the two directly).
+- `accumulate_relief` — ascent/descent via peak-valley hysteresis (design
+  doc §4.4 "Ascent with hysteresis"). Naive per-sample thresholding is
+  wrong in both directions: filtering every delta below `min_rise_m`
+  reports zero ascent for a long, genuinely-climbing shallow grade, and
+  filtering nothing at all reports phantom ascent from sub-metre DEM
+  noise on a flat road. Ascent and descent accumulate independently —
+  descent never offsets ascent (Global Constraints: "Descent never
+  credits effort").
+- `windowed_grades` — centred-difference grade over a multi-sample window
+  (design doc §4.4 "Grade"), not sample-to-sample, because a 10 m
+  baseline on 10 m data amplifies noise into phantom double-digit grades.
+- `build_profile` — the pipeline: resample -> sample -> smooth ->
+  accumulate -> grade -> `ElevationProfile`.
 
 Coordinate order is always `(lon, lat)` — see `types.LonLat` and Global
 Constraints. Getting this backwards is the classic geospatial bug; several
@@ -31,8 +49,16 @@ from pathlib import Path
 import numpy as np
 import rasterio
 from pyproj import Geod
+from scipy.signal import savgol_filter
 
-from contour.types import LonLat
+from contour.constants import (
+    GRADE_WINDOW_SAMPLES,
+    MIN_RISE_M,
+    PROFILE_SAMPLE_M,
+    SMOOTH_POLY_ORDER,
+    SMOOTH_WINDOW_SAMPLES,
+)
+from contour.types import ElevationProfile, LonLat, ProfilePoint
 
 _GEOD = Geod(ellps="WGS84")
 
@@ -263,4 +289,236 @@ class DemSampler:
         return values
 
 
-__all__ = ["DemSampler", "geodesic_length_m", "resample_polyline"]
+def smooth(ele: np.ndarray) -> np.ndarray:
+    """Savitzky-Golay smoothing of a sampled elevation series (design doc
+    §4.4 "Smoothing").
+
+    Window `SMOOTH_WINDOW_SAMPLES` (9 samples = 90 m at
+    `PROFILE_SAMPLE_M` spacing), polynomial order `SMOOTH_POLY_ORDER` (2),
+    `mode="nearest"` so the filter doesn't need to invent values past the
+    ends of a route. See `docs/DECISIONS.md` for why this is
+    Savitzky-Golay and not a moving average: a moving average is a local
+    *mean*, which flattens the curvature at a genuine hill crest along
+    with the noise; Savitzky-Golay fits a local polynomial and so tracks
+    real curvature while still rejecting high-frequency sampling noise.
+    `test_moving_average_loses_materially_more_peak_amplitude_than_savgol`
+    (tests/test_elevation_profile.py) pins the contrast directly rather
+    than asserting it only in prose.
+
+    Short-circuits to the identity (a copy, cast to `float64`) when `ele`
+    has fewer samples than the window — `scipy.signal.savgol_filter`
+    raises in that case, and short routes (a single block, a snapped
+    walk-up) are real inputs, not an edge case to reject.
+    """
+    ele = np.asarray(ele, dtype=np.float64)
+    if ele.shape[0] < SMOOTH_WINDOW_SAMPLES:
+        return ele.copy()
+    result: np.ndarray = savgol_filter(
+        ele, window_length=SMOOTH_WINDOW_SAMPLES, polyorder=SMOOTH_POLY_ORDER, mode="nearest"
+    )
+    return result
+
+
+def accumulate_relief(ele: np.ndarray, min_rise_m: float) -> tuple[float, float]:
+    """Total ascent and descent via peak-valley hysteresis (design doc
+    §4.4 "Ascent with hysteresis").
+
+    Naive per-sample thresholding is wrong in both directions: filtering
+    every delta below `min_rise_m` reports **zero** ascent for a long run
+    of small-but-consistent uphill steps that sum to a real climb;
+    filtering nothing at all reports ascent from sub-metre DEM sampling
+    noise on a flat road. The correct algorithm tracks a running extreme
+    and only commits a completed leg (as ascent or descent) once the
+    series has reversed by more than `min_rise_m` from that extreme.
+
+    Two phases, because the very first leg's direction is not yet known:
+
+    1. **Undetermined** — from the first sample, track both a running
+       high and a running low simultaneously. Neither is "confirmed" as
+       the start of a climb or descent until one of them has moved more
+       than `min_rise_m` away from the anchor (`ele[0]`). Until that
+       happens, nothing is committed — this is what makes sub-threshold
+       oscillation around a flat baseline correctly report zero ascent
+       *and* zero descent, rather than crediting whatever small drift
+       happened to be visible when the series ends
+       (`test_ascent_ignores_subthreshold_noise`).
+    2. **Determined** (up or down) — track the running extreme in that
+       direction; when the series reverses by more than `min_rise_m` from
+       it, commit the completed leg (extreme minus the last confirmed
+       pivot) to `ascent` or `descent`, set the pivot to that extreme, and
+       flip direction.
+
+    The boundary is inclusive: a reversal of *exactly* `min_rise_m`
+    commits (`test_ascent_hysteresis_commits_at_exact_threshold_boundary`
+    pins this both ways). The final open leg (whatever hasn't reversed by
+    the end of the series) is always committed — this is what makes a
+    long, never-reversing shallow climb count in full
+    (`test_ascent_accumulates_long_shallow_climb`), including when that
+    leg happens to still be in the undetermined phase (nothing committed:
+    a genuinely flat series ends undetermined, so both totals stay 0.0).
+
+    Ascent and descent accumulate independently in separate running
+    totals — descent is never subtracted from ascent, and vice versa
+    (Global Constraints: "Descent never credits effort").
+
+    Returns `(ascent_m, descent_m)` as plain Python `float`s.
+    """
+    ele = np.asarray(ele, dtype=np.float64)
+    n = ele.shape[0]
+    if n == 0:
+        return 0.0, 0.0
+
+    ascent = 0.0
+    descent = 0.0
+
+    pivot = float(ele[0])  # last confirmed turning point
+    direction = 0  # 0 = undetermined, 1 = up, -1 = down
+
+    # While undetermined, track both a running high and a running low
+    # since the anchor; while determined, only the active direction's
+    # extreme is meaningful (the other variable is simply not read).
+    hi = pivot
+    lo = pivot
+
+    for raw in ele[1:]:
+        x = float(raw)
+
+        if direction == 0:
+            hi = max(hi, x)
+            lo = min(lo, x)
+            if hi - pivot >= min_rise_m:
+                direction = 1
+            elif pivot - lo >= min_rise_m:
+                direction = -1
+            continue
+
+        if direction == 1:
+            hi = max(hi, x)
+            if x <= hi - min_rise_m:
+                ascent += hi - pivot
+                pivot = hi
+                direction = -1
+                lo = x
+        else:  # direction == -1
+            lo = min(lo, x)
+            if x >= lo + min_rise_m:
+                descent += pivot - lo
+                pivot = lo
+                direction = 1
+                hi = x
+
+    # Commit the final open leg, whatever direction it's in. An
+    # undetermined series (never moved more than min_rise_m from its
+    # start in either direction) commits nothing, by design.
+    if direction == 1:
+        ascent += hi - pivot
+    elif direction == -1:
+        descent += pivot - lo
+
+    return float(ascent), float(descent)
+
+
+def windowed_grades(ele: np.ndarray, spacing_m: float, window: int) -> np.ndarray:
+    """Centred-difference grade, in percent, over a `window`-sample
+    baseline (design doc §4.4 "Grade").
+
+    A 10 m baseline sampled at 10 m spacing amplifies ordinary DEM noise
+    into phantom double-digit grades; averaging the rise over a wider,
+    centred window damps that without smearing genuine block-scale grade
+    changes away (the window is 3 samples = 30 m by default,
+    `GRADE_WINDOW_SAMPLES`, well under the ~150 m shortest real SF block).
+
+    Near the two ends of the series, where a full centred window would
+    reach past the array, the window **shrinks** to whatever samples
+    exist on that side rather than padding with fabricated values — the
+    baseline distance shrinks along with it, so the percentage stays a
+    real "rise over run" computed only from real samples
+    (`test_windowed_grades_edges_shrink_not_pad`).
+
+    `ele` is assumed to be regularly spaced at `spacing_m` — the caller
+    (`build_profile`) passes `PROFILE_SAMPLE_M`, matching
+    `resample_polyline`'s nominal spacing. `resample_polyline`'s own
+    final sample can fall slightly short of that nominal spacing (it
+    always ends exactly on the route's last coordinate); this only
+    perturbs the grade estimate in the last `window // 2` samples of a
+    route by the same small amount `resample_polyline` already documents,
+    not a full baseline's worth of error.
+    """
+    ele = np.asarray(ele, dtype=np.float64)
+    n = ele.shape[0]
+    if n == 0:
+        return np.empty(0, dtype=np.float64)
+    if n == 1:
+        return np.zeros(1, dtype=np.float64)
+
+    half = window // 2
+    idx = np.arange(n)
+    left = np.clip(idx - half, 0, n - 1)
+    right = np.clip(idx + half, 0, n - 1)
+
+    delta_ele = ele[right] - ele[left]
+    delta_dist = (right - left).astype(np.float64) * spacing_m
+    # left == right can't happen for n >= 2 (right/left clip to opposite
+    # ends of a >=2-length array whenever half >= 1), but guard division
+    # by zero defensively rather than relying on that invariant silently.
+    safe_delta_dist = np.where(delta_dist > 0, delta_dist, 1.0)
+    grades: np.ndarray = np.where(delta_dist > 0, delta_ele / safe_delta_dist * 100.0, 0.0)
+    return grades
+
+
+def build_profile(coords: Sequence[LonLat], sampler: DemSampler) -> ElevationProfile:
+    """Assemble an `ElevationProfile` for a route's geometry (design doc
+    §4.4, task-6-brief.md resolution #1).
+
+    Pipeline, in order: geodesic resample at `PROFILE_SAMPLE_M` ->
+    bilinear DEM sample -> Savitzky-Golay smooth -> hysteresis
+    ascent/descent -> windowed grade. Smoothing runs exactly once, on the
+    raw sampled series, before both `accumulate_relief` and
+    `windowed_grades` — so ascent/descent and the grade series are
+    computed from the *same* smoothed elevations, not smoothed
+    independently or smoothed twice.
+
+    `max_grade_pct` is the peak magnitude of the windowed grade series
+    (not a raw sample-to-sample delta), so a single noisy pixel can't
+    drive the steepness warnings the product's honesty claims rest on.
+
+    An empty `coords` (or a `coords` that resamples to zero points, per
+    `resample_polyline`'s own degenerate-input handling) returns an empty
+    profile rather than raising.
+    """
+    resampled = resample_polyline(coords, PROFILE_SAMPLE_M)
+    if not resampled:
+        return ElevationProfile(points=(), ascent_m=0.0, descent_m=0.0, max_grade_pct=0.0)
+
+    points_lonlat = [point for point, _dist_m in resampled]
+    dists_m = [dist_m for _point, dist_m in resampled]
+
+    raw_ele = sampler.sample(points_lonlat)
+    smoothed = smooth(raw_ele)
+
+    ascent_m, descent_m = accumulate_relief(smoothed, MIN_RISE_M)
+    grades = windowed_grades(smoothed, PROFILE_SAMPLE_M, GRADE_WINDOW_SAMPLES)
+    max_grade_pct = float(np.max(np.abs(grades))) if grades.size else 0.0
+
+    points = tuple(
+        ProfilePoint(dist_m=float(dist_m), ele_m=float(ele_m))
+        for dist_m, ele_m in zip(dists_m, smoothed, strict=True)
+    )
+
+    return ElevationProfile(
+        points=points,
+        ascent_m=ascent_m,
+        descent_m=descent_m,
+        max_grade_pct=max_grade_pct,
+    )
+
+
+__all__ = [
+    "DemSampler",
+    "accumulate_relief",
+    "build_profile",
+    "geodesic_length_m",
+    "resample_polyline",
+    "smooth",
+    "windowed_grades",
+]

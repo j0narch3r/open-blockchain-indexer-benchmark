@@ -1302,3 +1302,178 @@ selection is that it is allowed to change its mind). Fabricating precise spot el
 worse than an honest `low`). Reporting the 21.24% all-hull clamp figure without repairing the
 metric (rejected — it would have been true and misleading). Adding Corona Heights protection of
 any kind (rejected — explicitly out of bounds, and the fragility is the finding).
+
+---
+
+## Task 6: Smoothing, ascent hysteresis, windowed grade, and profile assembly
+
+**Decided:** `services/api/contour/elevation.py` gains `smooth`, `accumulate_relief`,
+`windowed_grades`, and `build_profile`, exactly per the design doc §4.4 / task-6-brief.md
+interfaces. `build_profile`'s pipeline is resample -> sample -> smooth -> accumulate -> grade, with
+smoothing run exactly once on the raw sampled series and both `accumulate_relief` and
+`windowed_grades` consuming that same smoothed array — never smoothed twice, never computed from
+two different series.
+
+**Smoothing: Savitzky-Golay over a moving average, and why a test proves it, not just a comment.**
+A moving average is a local mean; averaging the samples straddling a genuine hill crest pulls the
+computed elevation *down* from the true peak by construction, because every window centred near the
+peak includes lower neighbouring points on both sides. Savitzky-Golay instead fits a local
+degree-2 polynomial per window and evaluates it at the centre — a real curved crest is well
+approximated by a local quadratic, so the fit tracks the peak's true height while still averaging
+away the high-frequency component that is DEM sampling noise, not terrain. This is exactly the
+failure mode design doc §4.4 names: "a moving average flattens genuine hill crests, which is
+exactly the error that makes a router think it can cross Nob Hill cheaply." The window is
+`SMOOTH_WINDOW_SAMPLES = 9` samples = 90 m at `PROFILE_SAMPLE_M` (10 m) spacing, chosen to sit just
+under the ~150 m length of the shortest real SF grade change (a single block), so genuine
+block-scale relief survives the filter and sub-block DEM noise does not.
+`test_moving_average_loses_materially_more_peak_amplitude_than_savgol`
+(`tests/test_elevation_profile.py`) builds a 20 m crest over a 300 m span (well above the 90 m
+window, so the crest itself isn't the thing being tested for survival — its *amplitude* through the
+filter is) and asserts a same-window moving average's amplitude loss is more than 1.5x
+Savitzky-Golay's own loss on the identical input; `test_smoothing_preserves_peak_amplitude` pins the
+brief's own ≥90%-of-amplitude requirement for Savitzky-Golay directly. Both passed on the first
+implementation with no parameter tuning needed beyond the constants already fixed in
+`constants.py`.
+
+Short routes (fewer samples than the 9-sample window) short-circuit `smooth` to an identity copy —
+`scipy.signal.savgol_filter` raises `ValueError` for `window_length > len(x)`, and a route shorter
+than 90 m is a real input (a single short block, a snapped walk-up), not a degenerate one to reject.
+`test_build_profile_short_route_does_not_crash_on_savgol_window` pins this directly against
+`build_profile`, not just `smooth` in isolation, since `build_profile` is what a caller actually
+invokes.
+
+**`scipy.signal` needed a narrowly-scoped mypy override, no new dependency.** `scipy` (already a
+project dependency) ships no `py.typed` marker. The matching PyPI stub package (`scipy-stubs`,
+latest 1.17.1.5) trails the installed `scipy` (1.18.0) and, per Global Constraints, adding a new
+dependency needs its own recorded justification that a two-line mypy override doesn't. Added
+`[[tool.mypy.overrides]] module = "scipy.signal"` to `pyproject.toml`, narrowly scoped to the one
+submodule `contour/` imports — same pattern Task 4 used for `rasterio.*` and Task 4 used again for
+`make_fixture_dem`.
+
+**Ascent hysteresis: peak-valley detection with an explicit "undetermined" phase, not just up/down.**
+Design doc §4.4's pseudocode states the up/down tracking rule but doesn't spell out how the very
+first leg's direction gets decided — and a naive choice there breaks one of the brief's own pinned
+tests. Concretely: if the algorithm commits to a direction (e.g. "up") based on the very first
+observed step and initializes its running extreme/pivot to `ele[0]`, then a 100-sample series
+oscillating ±0.4 m around a flat baseline (well under `MIN_RISE_M = 1.0`) ends the loop still
+notionally "in an up leg" whose committed magnitude is the *span between the first sample and
+whichever oscillation extreme happened to be reached* (0.8 m here) — because "commit the final open
+leg" fires unconditionally at the end, per the design doc's own pseudocode, and there was never a
+confirmed reversal to reset the pivot. 0.8 m fails
+`test_ascent_ignores_subthreshold_noise`'s `pytest.approx(0.0, abs=0.5)`.
+
+The fix: track direction as a three-state value — `0` (undetermined), `1` (up), `-1` (down) — and
+while undetermined, track a running high *and* a running low simultaneously against the anchor
+(`ele[0]`), only committing to a direction once one of them has moved `>= min_rise_m` away from the
+anchor. Until that happens nothing is committed at all, including at the end of the array: a series
+that never moves more than `min_rise_m` from its start in either direction ends undetermined, and
+both `ascent_m` and `descent_m` stay exactly `0.0`. This is what makes sub-threshold noise report
+zero instead of crediting whatever small drift happened to be visible when sampling stopped. Once a
+direction is confirmed, the algorithm is exactly the design doc's stated rule: track the extreme in
+that direction, commit the completed leg (extreme minus the last pivot) when the series reverses by
+more than `min_rise_m`, flip direction, and repeat; the final open leg always commits.
+`test_ascent_accumulates_long_shallow_climb` (40 steps of +0.9 m, well past `min_rise_m` by the
+second sample) and `test_descent_is_reported_separately_and_never_credits` (an up-ramp then a
+symmetric down-ramp) both pass unchanged by this refinement — the undetermined phase only matters
+for series that never move far enough to leave it.
+
+**The reversal-commit boundary is inclusive: exactly `min_rise_m` commits.** Design doc §4.4's
+pseudocode is written with a strict `<` ("`if ele < extreme - MIN_RISE_M`"), which — read literally
+— would mean a reversal of *exactly* `MIN_RISE_M` does **not** commit, only a reversal strictly
+greater than it does. Implemented instead with an inclusive `>=` (equivalently, `x <= extreme -
+min_rise_m` to trigger a down-commit from an up leg), so a reversal of exactly `MIN_RISE_M` commits.
+This was a deliberate choice, not an oversight, made because it is the more useful boundary to pin:
+`test_ascent_hysteresis_commits_at_exact_threshold_boundary` constructs a climb-dip-climb profile
+with a dip of exactly `MIN_RISE_M` (total ascent 21 m across two committed legs, descent 1 m) against
+the same shape with a dip of `MIN_RISE_M - 0.01` (the dip never confirms; the whole thing reads as
+one continuous 20 m climb, zero descent) — the two cases differ by exactly the dip's own magnitude,
+which is a clean, legible pin of "which side of the boundary commits" per the task instructions.
+Flagging the discrepancy from the design doc's literal `<` rather than silently choosing one
+reading: **if `<` was intended literally, this is a one-line change** (`>=` -> `>` at both commit
+sites), and no currently-listed test distinguishes the two except the boundary test above, which
+would need its expected values swapped (21/1 -> whatever the strict-`<` reading produces for the
+same input — the "exactly `MIN_RISE_M`" case would fall through to the *next* sample instead).
+
+**Round-trip invariant.** `test_round_trip_ascent_approx_equals_descent` runs a real fixture-graph
+path (Portola Drive -> Twin Peaks Boulevard over the summit -> Clarendon Avenue) and its exact
+reverse through `build_profile`, and asserts `|ascent - descent| <= 3 * MIN_RISE_M`. Measured:
+ascent 386.73 m, descent 386.68 m, difference 0.05 m — far inside the 3 m budget, which was sized to
+absorb hysteresis edge effects at the geometry's start/end rather than tuned to the observed result.
+
+**Grade: centred-difference window shrinks at the array edges instead of padding.** Implemented with
+`np.clip` on the left/right window indices independently, so a query near either end of the array
+naturally gets a smaller, one-sided baseline (e.g. the very first sample uses `[0, half]` instead of
+the full `[-half, +half]`) rather than a padded/reflected value that isn't a real measurement.
+`test_windowed_grades_edges_shrink_not_pad` pins this against a profile where zero-padding would
+visibly change the edge grade values. `max_grade_pct` in `build_profile` is
+`max(abs(windowed_grades))` — the peak magnitude of the windowed series, in either direction (a
+steep descent is exactly as much a steepness-honesty concern as a steep climb), matching the design
+doc's "not driven by a single bad pixel" requirement.
+
+**Known imprecision, accepted deliberately.** `windowed_grades(ele, spacing_m, window)`'s signature
+(fixed by the brief, consumed exactly by Task 7/12) takes a single scalar `spacing_m`, not a
+per-sample distance array — so `build_profile` calls it with the nominal `PROFILE_SAMPLE_M`, even
+though `resample_polyline`'s own final sample can land slightly short of that nominal spacing (it
+always lands exactly on the route's final coordinate; see Task 5's decisions). This only perturbs
+the grade estimate in the last `window // 2` samples of a route by the same small amount
+`resample_polyline` already documents (well under a metre for realistic route lengths), not a
+full baseline's worth of error, and keeping the exact locked interface was judged more important
+than a marginal edge-case precision gain that would require changing a signature two downstream
+tasks depend on.
+
+**Holdout-landmark tolerance superseded, not re-litigated.** The brief's Step 1 test list states
+`test_holdout_landmarks_within_tolerance` at "±12 m" verbatim. That figure predates Task 4's own
+measured revision (`docs/DECISIONS.md` "Task 4, fix round 1"/"fix round 3", design doc §2.3): the
+interpolator's own median leave-one-out error is 13.80 m, so a ±12 m gate sits *below* the model's
+demonstrated noise floor and cannot be met by any parameter choice — Task 4 replaced it with ±25 m
+(non-summit) / ±40 m (summit: Twin Peaks, Bernal Heights, Corona Heights), which
+`tests/test_fixture_dem.py` already gates on. Implemented `test_holdout_landmarks_within_tolerance`
+in `tests/test_elevation_profile.py` against the superseding ±25/±40 m tolerances instead of the
+brief's stale ±12 m, importing `HOLDOUT_TOLERANCE_M`/`SUMMIT_HOLDOUT_TOLERANCE_M` directly from
+`scripts/make_fixture_dem.py` (same `sys.path` pattern `test_fixture_dem.py` already uses) rather
+than duplicating the numbers as literals, so this file cannot silently drift from the measured
+ruling. This test exercises a different code path than `test_fixture_dem.py`'s own holdout gate —
+`DemSampler`'s hand-rolled bilinear sampling against the committed fixture DEM file, not the DEM
+generator's internal nearest-neighbour array indexing — so it validates the Task 5/6 sampling
+machinery specifically, per the brief's own note that this is not a DEM-accuracy gate. All 7 named
+holdouts pass.
+
+**Bernal Heights summit is neither gated nor reported here — deliberately, following the brief
+literally.** The brief's gating list names exactly 7 holdouts and its non-gating list names exactly
+2 (Ocean Beach at Judah, Lands End), leaving Bernal Heights summit (a real holdout with an
+independent-but-uncertain source: "Wikipedia, sources vary 433-475 ft") out of both lists. Rather
+than guess which tier the brief intended for it, this task tests exactly the 9 holdouts the brief
+names and no more — Bernal Heights summit remains covered by `test_fixture_dem.py`'s own
+nearest-neighbour holdout gate (which does test all 10), just not re-validated here through
+`DemSampler`. Flagged in the task report rather than silently deciding a tier for it.
+
+**Real SF profile, measured, not asserted to a golden value.** `build_profile` run over a real,
+graph-connected 15-vertex path (Portola Drive -> Twin Peaks Boulevard, climbing to the saddle near
+the true Twin Peaks summit -> Clarendon Avenue descending the far side) against the committed
+fixture DEM produces `ascent_m = 258.2`, `descent_m = 129.2`, `max_grade_pct = 37.9`. Twin Peaks'
+real summit is 281 m (a holdout, per the control-point CSV); this route's vertices don't reach the
+exact summit coordinate, so an ascent somewhat below that full relief is physically expected. The
+committed test (`test_build_profile_on_real_sf_path_is_physically_plausible`) asserts a wide sanity
+band (100-350 m ascent, 20-200 m descent, ascent > descent, 0 < max grade <= 40%) rather than the
+measured point value, consistent with the brief's "not a precise value — a sanity band" instruction
+and with design doc §2.3's repeated point that this fixture DEM cannot certify accuracy at any
+tight tolerance. `max_grade_pct` (37.9%) is high for a real SF street but not implausible for this
+specific synthetic DEM, whose known limitation (§2.3: "effective resolution is far coarser than its
+10 m grid... except where control points are locally dense") can produce locally sharp
+interpolation transitions near a sparsely-controlled summit approach; the ceiling was set generously
+(40%) rather than tightened to the observed value, so the test doesn't silently become a golden-value
+assertion in disguise.
+
+**Alternatives rejected:** Initializing the hysteresis algorithm's direction from the first observed
+step, with the pivot fixed at `ele[0]` from the start (rejected — produces a spurious "free" leg
+equal to the anchor-to-first-extreme span whenever the series ends without ever confirming a
+reversal, which is exactly `test_ascent_ignores_subthreshold_noise`'s failure mode; see above).
+Implementing the design doc's `<` boundary literally (rejected in favor of an inclusive `>=` — see
+above; flagged, not silently overridden). Vectorizing `accumulate_relief` with numpy (considered —
+the algorithm is inherently sequential/stateful, unlike `DemSampler.sample`'s independent
+per-point work, so a Python loop over the resampled series, typically hundreds to low thousands of
+points per route, is the direct implementation rather than a numpy trick that would obscure the
+state machine). Computing `windowed_grades` from the true per-sample cumulative-distance array
+instead of a scalar `spacing_m` (rejected — the interface is locked for Task 7/Task 12; documented
+as a known, small, deliberately-accepted imprecision above rather than a silent deviation from the
+brief's signature).

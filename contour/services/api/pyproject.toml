@@ -53,6 +53,17 @@ python_version = "3.12"
 module = "rasterio.*"
 ignore_missing_imports = true
 
+# scipy ships no py.typed marker either (checked Task 6); the matching
+# `scipy-stubs` PyPI package's latest release (1.17.1.5) trails the
+# installed scipy (1.18.0) and adding a new dependency needs its own
+# justification (Global Constraints) that a two-line mypy override
+# doesn't. Narrowly scoped to `scipy.signal` (the only scipy submodule
+# `contour/` imports), same pattern as the `rasterio.*` override above.
+# See docs/DECISIONS.md Task 6.
+[[tool.mypy.overrides]]
+module = "scipy.signal"
+ignore_missing_imports = true
+
 # `scripts/make_fixture_dem.py` lives outside `services/api` (design doc
 # §8 repo layout) and is loaded at test runtime via an explicit
 # `sys.path.insert` in tests/test_fixture_dem.py, not as an installed or
